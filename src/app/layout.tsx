@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '🍽️ Sungwoon\'s Super Friendly Menu 🌏',
+  title: 'Friendly Gasan Menu by Sungwoon 🌏',
   description: 'No need to overThink it—Gasan\'s everyday meals are now available in four languages! Always easy to check, always ready for you. 😄',
   icons: {
     icon: '/icon.png',
@@ -13,10 +13,10 @@ export const metadata: Metadata = {
     apple: '/apple-icon.png',
   },
   openGraph: {
-    title: '🍽️ Sungwoon\'s Super Friendly Menu 🌏',
+    title: 'Friendly Gasan Menu by Sungwoon 🌏',
     description: 'No need to overThink it—Gasan\'s everyday meals are now available in four languages! Always easy to check, always ready for you. 😄',
     url: 'https://menu.sungwoonsong.com',
-    siteName: 'Sungwoon\'s Super Friendly Menu',
+    siteName: 'Friendly Gasan Menu by Sungwoon ',
     images: [
       {
         url: '/og-image.png',
@@ -27,10 +27,10 @@ export const metadata: Metadata = {
     ],
     locale: 'ko_KR',
     type: 'website',
-  },
+  },  
   twitter: {
     card: 'summary_large_image',
-    title: '🍽️ Sungwoon\'s Super Friendly Menu 🌏',
+    title: 'Friendly Gasan Menu by Sungwoon 🌏',
     description: 'No need to overThink it—Gasan\'s everyday meals are now available in four languages! Always easy to check, always ready for you. 😄',
     images: ['/og-image.png'],
   },
