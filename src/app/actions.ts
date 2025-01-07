@@ -12,6 +12,4 @@ export async function changeLanguage(formData: FormData) {
 
   // 페이지 재검증
   revalidatePath('/');
-  
-  return { language };
 }

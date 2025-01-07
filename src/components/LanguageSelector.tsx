@@ -29,9 +29,9 @@ export default function LanguageSelector({ currentLanguage }: LanguageSelectorPr
           }
         }}
       >
-        {LANGUAGES.map((lang) => (
+        {Object.keys(LANGUAGES).map((lang) => (
           <option key={lang} value={lang}>
-            {lang.toUpperCase()}
+            {LANGUAGES[lang as Language]}
           </option>
         ))}
       </select>
