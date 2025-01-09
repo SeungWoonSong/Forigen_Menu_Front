@@ -2,9 +2,7 @@ import { WeekMenu, DayMenu } from '@/types/menu';
 import { format, addDays, isSunday, isWeekend } from 'date-fns';
 
 // Dynamically determine API URL based on the current hostname
-const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? 'http://localhost:8888'
-  : 'https://menu.api.sungwoonsong.com';
+const API_URL = 'https://menu.api.sungwoonsong.com';
 
 export type Language = 'ko' | 'en' | 'zh' | 'sv';
 
@@ -15,7 +13,53 @@ export const LANGUAGES = {
   sv: 'Svenska'
 };
 
+interface CachedData {
+  data: WeekMenu;
+  timestamp: number;
+}
+
+const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+
+function getFromCache(key: string): WeekMenu | null {
+  if (typeof window === 'undefined') return null;
+  
+  const cached = localStorage.getItem(key);
+  if (!cached) return null;
+
+  try {
+    const { data, timestamp }: CachedData = JSON.parse(cached);
+    const now = Date.now();
+
+    if (now - timestamp > CACHE_DURATION) {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setToCache(key: string, data: WeekMenu) {
+  if (typeof window === 'undefined') return;
+  
+  const cacheData: CachedData = {
+    data,
+    timestamp: Date.now()
+  };
+
+  localStorage.setItem(key, JSON.stringify(cacheData));
+}
+
 export async function getWeeklyMenu(date: Date = new Date(), language: Language = 'en'): Promise<WeekMenu> {
+  const cacheKey = `menu-${format(date, 'yyyyMMdd')}-${language}`;
+  const cachedData = getFromCache(cacheKey);
+  
+  if (cachedData) {
+    return cachedData;
+  }
+
   // If it's Sunday, start from the next day (Monday)
   const startDate = isSunday(date) ? addDays(date, 1) : date;
   const days: DayMenu[] = [];
@@ -51,5 +95,8 @@ export async function getWeeklyMenu(date: Date = new Date(), language: Language 
     currentDate = addDays(currentDate, 1);
   }
   
-  return { days };
+  const weeklyMenu = { days };
+  setToCache(cacheKey, weeklyMenu);
+  
+  return weeklyMenu;
 }
