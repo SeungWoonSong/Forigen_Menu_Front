@@ -57,14 +57,10 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
         const todayTab = tabs[todayIndex] as HTMLElement
         
         if (todayTab) {
-          const containerWidth = container.offsetWidth
-          const tabOffset = todayTab.offsetLeft
-          const tabWidth = todayTab.offsetWidth
-          const scrollPosition = tabOffset - (containerWidth / 2) + (tabWidth / 2)
-          
-          container.scrollTo({
-            left: Math.max(0, scrollPosition),
-            behavior: 'smooth'
+          todayTab.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'center'
           })
         }
       }
@@ -103,15 +99,6 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     }
   }
 
-  const getTodayLabel = () => {
-    switch (language) {
-      case "ko": return "오늘"
-      case "zh": return "今天"
-      case "sv": return "Idag"
-      default: return "Today"
-    }
-  }
-
   // Load more days to the left (past)
   const loadMoreLeft = useCallback(async () => {
     if (isLoadingLeft || days.length === 0) return
@@ -147,23 +134,27 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
   // Scroll to center on today only on initial mount or language change
   useEffect(() => {
     if (tabsListRef.current && todayIndex >= 0 && !hasInitialScrolled.current) {
-      const container = tabsListRef.current
-      const tabs = container.querySelectorAll('[role="tab"]')
-      const todayTab = tabs[todayIndex] as HTMLElement
-      
-      if (todayTab) {
-        const containerWidth = container.offsetWidth
-        const tabOffset = todayTab.offsetLeft
-        const tabWidth = todayTab.offsetWidth
-        const scrollPosition = tabOffset - (containerWidth / 2) + (tabWidth / 2)
-        
-        container.scrollTo({
-          left: Math.max(0, scrollPosition),
-          behavior: 'smooth'
+      // Wait for layout to be fully calculated
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const container = tabsListRef.current
+          if (!container) return
+          
+          const tabs = container.querySelectorAll('[role="tab"]')
+          const todayTab = tabs[todayIndex] as HTMLElement
+          
+          if (todayTab) {
+            // Use scrollIntoView for more accurate centering
+            todayTab.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest',
+              inline: 'center'
+            })
+            
+            hasInitialScrolled.current = true
+          }
         })
-        
-        hasInitialScrolled.current = true
-      }
+      })
     }
   }, [todayIndex, days])
 
