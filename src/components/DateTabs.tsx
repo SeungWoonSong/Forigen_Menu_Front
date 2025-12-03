@@ -194,17 +194,15 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
               key={day.date}
               value={day.date}
               className={cn(
-                "min-w-[80px] sm:min-w-[100px]",
+                "min-w-[80px] sm:min-w-[100px] group",
                 day.date === today &&
                   "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               )}
             >
-              <span className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1">
+              <span className="flex flex-col items-center gap-1">
                 <span className="text-xs sm:text-sm">{formatTabDate(day.date)}</span>
                 {day.date === today && (
-                  <span className="text-[10px] sm:text-xs font-normal opacity-75">
-                    {getTodayLabel()}
-                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary group-data-[state=active]:bg-primary-foreground transition-colors" />
                 )}
               </span>
             </TabsTrigger>

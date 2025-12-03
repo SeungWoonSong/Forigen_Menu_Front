@@ -161,7 +161,7 @@ export default function Home() {
           >
             Made by Sungwoon Song
           </a>
-          <p className="text-xs text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/60 text-center px-4 hidden sm:block">
             Though I&apos;ve moved on from Ericsson, I hope this site helps my former colleagues enjoy their meals.
           </p>
         </div>

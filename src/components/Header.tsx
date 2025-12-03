@@ -50,11 +50,8 @@ export function Header({ language, onLanguageChange, onTodayClick }: HeaderProps
             />
           </motion.div>
           <div className="flex flex-col items-start">
-            <span className="font-bold text-lg tracking-tight hidden sm:block bg-gradient-to-r from-[#4A4A4A] to-[#8B7355] bg-clip-text text-transparent group-hover:from-[#8B7355] group-hover:to-[#4A4A4A] transition-all duration-300">
+            <span className="font-bold text-base sm:text-lg tracking-tight bg-gradient-to-r from-[#2D2D2D] to-[#6B4F3A] dark:from-[#9CA3AF] dark:to-[#C4A77D] bg-clip-text text-transparent group-hover:from-[#6B4F3A] group-hover:to-[#2D2D2D] dark:group-hover:from-[#C4A77D] dark:group-hover:to-[#9CA3AF] transition-all duration-300">
               Gasan Menu
-            </span>
-            <span className="font-bold text-lg tracking-tight sm:hidden bg-gradient-to-r from-[#4A4A4A] to-[#8B7355] bg-clip-text text-transparent">
-              Menu
             </span>
             <span className="text-[10px] text-muted-foreground hidden sm:block -mt-0.5">
               by Sungwoon

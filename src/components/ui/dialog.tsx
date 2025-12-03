@@ -51,7 +51,7 @@ export function DialogContent({
   return (
     <div
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] w-full max-w-lg border bg-background p-6 shadow-lg sm:rounded-lg",
+        "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] w-[calc(100%-2rem)] max-w-lg border bg-background p-6 shadow-lg rounded-lg",
         className
       )}
       {...props}
