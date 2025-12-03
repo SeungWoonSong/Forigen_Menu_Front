@@ -1,102 +1,171 @@
-'use client';
+"use client"
 
-import { useState, useEffect } from 'react';
-import WeeklyMenu from '@/components/WeeklyMenu';
-import TodayMenu from '@/components/TodayMenu';
-import { getWeeklyMenu, Language, LANGUAGES } from '@/services/menuService';
-import { WeekMenu, DayMenu } from '@/types/menu';
-import { format } from 'date-fns';
+import { useState, useEffect, useRef } from "react"
+import { getCenteredMenu, Language } from "@/services/menuService"
+import { DayMenu } from "@/types/menu"
+import { Header } from "@/components/Header"
+import { EmptyMenuCard } from "@/components/MenuCard"
+import { DateTabs, DateTabsSkeleton, DateTabsRef } from "@/components/DateTabs"
+import { LanguageSelectModal } from "@/components/LanguageSelectModal"
+import { AlertCircle } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { getTodayKST } from "@/lib/utils"
+
+const LANGUAGE_STORAGE_KEY = "gasan-menu-language"
 
 export default function Home() {
-  const [weeklyMenu, setWeeklyMenu] = useState<WeekMenu | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showWeekly, setShowWeekly] = useState(false);
-  const [language, setLanguage] = useState<Language>('ko');
+  const [days, setDays] = useState<DayMenu[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [language, setLanguage] = useState<Language | null>(null)
+  const [showLanguageModal, setShowLanguageModal] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
+  
+  const dateTabsRef = useRef<DateTabsRef>(null)
 
+  // Use KST timezone to ensure correct date in Korea
+  const today = getTodayKST()
+  
+  // Go to today's menu
+  const handleTodayClick = () => {
+    dateTabsRef.current?.goToToday()
+  }
+
+  // Check for saved language preference on mount
   useEffect(() => {
+    const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) as Language | null
+    
+    if (savedLanguage && ["ko", "en", "zh", "sv"].includes(savedLanguage)) {
+      setLanguage(savedLanguage)
+    } else {
+      // First visit - show language selection modal
+      setShowLanguageModal(true)
+    }
+    setIsInitialized(true)
+  }, [])
+
+  // Handle language selection from modal
+  const handleLanguageSelect = (lang: Language) => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
+    setLanguage(lang)
+    setShowLanguageModal(false)
+  }
+
+  // Handle language change from header dropdown
+  const handleLanguageChange = (lang: Language) => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
+    setLanguage(lang)
+  }
+
+  // Fetch menu when language is set
+  useEffect(() => {
+    if (!language) return
+
     const fetchMenu = async () => {
+      setIsLoading(true)
+      setError(null)
       try {
-        const menu = await getWeeklyMenu(new Date(), language);
-        console.log('Fetched menu:', menu); // Debug log
-        setWeeklyMenu(menu);
+        // Fetch centered menu (2 days before, today, 2 days after)
+        const menu = await getCenteredMenu(new Date(), 2, 2, language)
+        setDays(menu.days)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch menu');
+        setError(err instanceof Error ? err.message : "Failed to fetch menu")
+      } finally {
+        setIsLoading(false)
       }
-    };
+    }
 
-    fetchMenu();
-  }, [language]);
+    fetchMenu()
+  }, [language])
 
-  const today = format(new Date(), 'yyyyMMdd');
-  const todayMenu = weeklyMenu?.days.find(day => day.date === today);
+  // Show nothing until we check for saved language
+  if (!isInitialized) {
+    return null
+  }
 
-  console.log('Today:', today); // Debug log
-  console.log('Today menu:', todayMenu); // Debug log
+  // Show language selection modal for first-time visitors
+  if (showLanguageModal) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
+        <LanguageSelectModal open={true} onSelect={handleLanguageSelect} />
+      </div>
+    )
+  }
+
+  // Safety check - should not happen but TypeScript needs it
+  if (!language) {
+    return null
+  }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-100 py-8">
-        <div className="container mx-auto px-4">
-          <h1 className="text-3xl font-bold text-center mb-8 text-red-600">
-            Error: {error}
-          </h1>
-        </div>
-      </main>
-    );
-  }
-
-  if (!weeklyMenu) {
-    return (
-      <main className="min-h-screen bg-gray-100 py-8">
-        <div className="container mx-auto px-4">
-          <h1 className="text-3xl font-bold text-center mb-8">
-            Loading...
-          </h1>
-        </div>
-      </main>
-    );
+      <div className="min-h-screen flex flex-col">
+        <Header language={language} onLanguageChange={handleLanguageChange} onTodayClick={handleTodayClick} />
+        <main className="flex-1 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full">
+            <CardContent className="py-8 flex flex-col items-center text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+              <h2 className="text-xl font-semibold mb-2">
+                {language === "ko"
+                  ? "오류가 발생했습니다"
+                  : language === "zh"
+                  ? "发生错误"
+                  : language === "sv"
+                  ? "Ett fel uppstod"
+                  : "An error occurred"}
+              </h2>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                {language === "ko"
+                  ? "다시 시도"
+                  : language === "zh"
+                  ? "重试"
+                  : language === "sv"
+                  ? "Försök igen"
+                  : "Try again"}
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    )
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 py-8">
-      <div className="container mx-auto px-4">
-        {/* Language selector */}
-        <div className="flex justify-center mb-8 space-x-4">
-          {Object.entries(LANGUAGES).map(([code, name]) => (
-            <button
-              key={code}
-              onClick={() => setLanguage(code as Language)}
-              className={`px-4 py-2 rounded-lg ${
-                language === code
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
+      <Header language={language} onLanguageChange={handleLanguageChange} onTodayClick={handleTodayClick} />
 
-        {/* View toggle */}
-        <div className="flex justify-center mb-8">
-          <button
-            onClick={() => setShowWeekly(!showWeekly)}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-          >
-            {showWeekly ? 'Today Menu' : 'Weekly Menu'}
-          </button>
-        </div>
-
-        {showWeekly ? (
-          <WeeklyMenu menu={weeklyMenu} />
-        ) : todayMenu ? (
-          <TodayMenu menu={todayMenu} />
+      <main className="flex-1 container max-w-2xl mx-auto px-4 py-6">
+        {isLoading ? (
+          <DateTabsSkeleton />
+        ) : days.length > 0 ? (
+          <DateTabs
+            ref={dateTabsRef}
+            initialDays={days}
+            language={language}
+            today={today}
+          />
         ) : (
-          <div className="text-center text-xl text-gray-600">
-            오늘은 메뉴가 없습니다.
-          </div>
+          <EmptyMenuCard language={language} />
         )}
-      </div>
-    </main>
-  );
+      </main>
+
+      <footer className="py-6 border-t">
+        <div className="flex flex-col items-center gap-1.5">
+          <a
+            href="https://www.linkedin.com/in/sungwoonsong"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Made by Sungwoon Song
+          </a>
+          <p className="text-xs text-muted-foreground/60">
+            Though I&apos;ve moved on from Ericsson, I hope this site helps my former colleagues enjoy their meals.
+          </p>
+        </div>
+      </footer>
+    </div>
+  )
 }

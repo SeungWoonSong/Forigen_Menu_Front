@@ -1,12 +1,23 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Noto_Sans_KR } from 'next/font/google'
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/react"
+import { ThemeProvider } from "@/components/theme-provider"
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+})
+
+const notoSansKR = Noto_Sans_KR({
+  variable: "--font-noto-sans-kr",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+})
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://menu.sungwoonsong.com'),
   title: 'Gasan Menu by Sungwoon ',
   description: 'No need to overThink it—Gasan\'s everyday meals are now available in four languages! Always easy to check, always ready for you. ',
   icons: {
@@ -44,9 +55,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ko">
-      <body className={inter.className}>
-        {children}
+    <html lang="ko" suppressHydrationWarning>
+      <body className={`${inter.variable} ${notoSansKR.variable} font-sans antialiased`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
         <SpeedInsights />
         <Analytics />
       </body>
