@@ -1,94 +1,55 @@
-"use client"
+"use client";
 
-import { Language, LANGUAGES } from "@/services/menuService"
-import { ThemeToggle } from "./theme-toggle"
-import { Button } from "./ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu"
-import { Globe } from "lucide-react"
-import Image from "next/image"
-import { motion } from "framer-motion"
+import type { Language } from "../types/menu";
+import { LANGUAGES, PENGUIN } from "../lib/menu";
+import { menuCopy } from "../lib/menu-copy";
+import { ThemeToggle } from "./theme-toggle";
+import Image from "next/image";
+
+export const LANGUAGE_SWITCH_ID = "menu-language";
 
 interface HeaderProps {
-  language: Language
-  onLanguageChange: (lang: Language) => void
-  onTodayClick?: () => void
-}
-
-const languageFlags: Record<Language, string> = {
-  ko: "🇰🇷",
-  en: "🇺🇸",
-  zh: "🇨🇳",
-  sv: "🇸🇪",
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+  onTodayClick: () => void;
 }
 
 export function Header({ language, onLanguageChange, onTodayClick }: HeaderProps) {
-  return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container max-w-2xl mx-auto flex h-14 items-center justify-between px-4">
-        <motion.button
-          onClick={onTodayClick}
-          className="flex items-center gap-2.5 group cursor-pointer"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <motion.div
-            className="relative"
-            whileHover={{ rotate: [0, -10, 10, -5, 0] }}
-            transition={{ duration: 0.5 }}
-          >
-            <Image
-              src="/mascot.png"
-              alt="Menu Penguin"
-              width={38}
-              height={38}
-              className="drop-shadow-md"
-            />
-          </motion.div>
-          <div className="flex flex-col items-start">
-            <span className="font-bold text-base sm:text-lg tracking-tight bg-gradient-to-r from-[#2D2D2D] to-[#6B4F3A] dark:from-[#9CA3AF] dark:to-[#C4A77D] bg-clip-text text-transparent group-hover:from-[#6B4F3A] group-hover:to-[#2D2D2D] dark:group-hover:from-[#C4A77D] dark:group-hover:to-[#9CA3AF] transition-all duration-300">
-              Gasan Menu
-            </span>
-            <span className="text-[10px] text-muted-foreground hidden sm:block -mt-0.5">
-              by Sungwoon
-            </span>
-          </div>
-        </motion.button>
+  const copy = menuCopy[language];
 
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Globe className="h-4 w-4" />
-                <span className="hidden sm:inline-block">
-                  {LANGUAGES[language]}
-                </span>
-                <span className="sm:hidden">{languageFlags[language]}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {(Object.entries(LANGUAGES) as [Language, string][]).map(
-                ([code, name]) => (
-                  <DropdownMenuItem
-                    key={code}
-                    onClick={() => onLanguageChange(code)}
-                    className={language === code ? "bg-accent" : ""}
-                  >
-                    <span className="mr-2">{languageFlags[code]}</span>
-                    {name}
-                  </DropdownMenuItem>
-                )
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <ThemeToggle />
+  return (
+    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-2 px-4 sm:px-6">
+        <button
+          type="button"
+          onClick={onTodayClick}
+          aria-label={`Gasan Menu · ${copy.today}`}
+          className="flex items-center gap-1.5 rounded-lg text-sm font-bold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5 sm:text-lg"
+        >
+          <Image src={PENGUIN.mascot} alt="" width={38} height={38} className="max-[359px]:w-8" priority />
+          Gasan Menu
+        </button>
+
+        <div className="flex items-center gap-1 sm:gap-3">
+          <div role="group" aria-label={copy.languages} className="flex items-center rounded-xl border bg-card p-0.5">
+            {(Object.keys(LANGUAGES) as Language[]).map(code => (
+              <button
+                key={code}
+                id={`${LANGUAGE_SWITCH_ID}-${code}`}
+                type="button"
+                lang={code}
+                aria-label={LANGUAGES[code].name}
+                aria-pressed={language === code}
+                onClick={() => onLanguageChange(code)}
+                className="h-9 min-w-8 rounded-lg px-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-[hsl(var(--menu-accent))] aria-pressed:text-[hsl(var(--menu-accent-foreground))] sm:min-w-10"
+              >
+                {LANGUAGES[code].short}
+              </button>
+            ))}
+          </div>
+          <ThemeToggle label={copy.theme} />
         </div>
       </div>
     </header>
-  )
+  );
 }
-

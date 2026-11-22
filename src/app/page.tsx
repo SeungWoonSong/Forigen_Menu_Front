@@ -1,171 +1,104 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef } from "react"
-import { getCenteredMenu, Language } from "@/services/menuService"
-import { DayMenu } from "@/types/menu"
-import { Header } from "@/components/Header"
-import { EmptyMenuCard } from "@/components/MenuCard"
-import { DateTabs, DateTabsSkeleton, DateTabsRef } from "@/components/DateTabs"
-import { LanguageSelectModal } from "@/components/LanguageSelectModal"
-import { AlertCircle } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { getTodayKST } from "@/lib/utils"
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { X } from "lucide-react";
+import { Header, LANGUAGE_SWITCH_ID } from "../components/Header";
+import { DateTabs } from "../components/DateTabs";
+import type { DateTabsRef } from "../components/DateTabs";
+import { MenuStatus } from "../components/MenuStatus";
+import { readPreference, writePreference } from "../lib/browser-storage";
+import { dateInKorea, LANGUAGES, PENGUIN, selectLanguage, timeInKorea } from "../lib/menu";
+import { menuCopy } from "../lib/menu-copy";
+import type { Language } from "../types/menu";
 
-const LANGUAGE_STORAGE_KEY = "gasan-menu-language"
+const LANGUAGE_KEY = "gasan-menu-language";
+const WELCOME_KEY = "gasan-menu-welcome-dismissed";
 
 export default function Home() {
-  const [days, setDays] = useState<DayMenu[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [language, setLanguage] = useState<Language | null>(null)
-  const [showLanguageModal, setShowLanguageModal] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
-  
-  const dateTabsRef = useRef<DateTabsRef>(null)
+  const [language, setLanguage] = useState<Language>("en");
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [now, setNow] = useState<Date>();
+  const dateTabsRef = useRef<DateTabsRef>(null);
+  const copy = menuCopy[language];
 
-  // Use KST timezone to ensure correct date in Korea
-  const today = getTodayKST()
-  
-  // Go to today's menu
-  const handleTodayClick = () => {
-    dateTabsRef.current?.goToToday()
-  }
-
-  // Check for saved language preference on mount
   useEffect(() => {
-    const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) as Language | null
-    
-    if (savedLanguage && ["ko", "en", "zh", "sv"].includes(savedLanguage)) {
-      setLanguage(savedLanguage)
-    } else {
-      // First visit - show language selection modal
-      setShowLanguageModal(true)
-    }
-    setIsInitialized(true)
-  }, [])
+    const saved = readPreference(LANGUAGE_KEY);
+    const selected = selectLanguage(saved, navigator.languages);
+    setLanguage(selected);
+    setShowWelcome(saved !== selected && readPreference(WELCOME_KEY) !== "yes");
+  }, []);
 
-  // Handle language selection from modal
-  const handleLanguageSelect = (lang: Language) => {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
-    setLanguage(lang)
-    setShowLanguageModal(false)
-  }
-
-  // Handle language change from header dropdown
-  const handleLanguageChange = (lang: Language) => {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
-    setLanguage(lang)
-  }
-
-  // Fetch menu when language is set
   useEffect(() => {
-    if (!language) return
+    document.documentElement.lang = language;
+  }, [language]);
 
-    const fetchMenu = async () => {
-      setIsLoading(true)
-      setError(null)
-      try {
-        // Fetch centered menu (2 days before, today, 2 days after)
-        const menu = await getCenteredMenu(new Date(), 2, 2, language)
-        setDays(menu.days)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch menu")
-      } finally {
-        setIsLoading(false)
-      }
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function updateClock() {
+      clearTimeout(timer);
+      const current = new Date();
+      setNow(current);
+      const isoDate = dateInKorea(current).replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
+      const firstDinner = Date.parse(`${isoDate}T14:00:00+09:00`);
+      const midnight = Date.parse(`${isoDate}T00:00:00+09:00`) + 86_400_000;
+      const boundary = current.getTime() < firstDinner ? firstDinner : midnight;
+      timer = setTimeout(updateClock, boundary - current.getTime());
     }
+    updateClock();
+    document.addEventListener("visibilitychange", updateClock);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", updateClock);
+    };
+  }, []);
 
-    fetchMenu()
-  }, [language])
-
-  // Show nothing until we check for saved language
-  if (!isInitialized) {
-    return null
+  function dismissWelcome() {
+    writePreference(WELCOME_KEY, "yes");
+    setShowWelcome(false);
   }
 
-  // Show language selection modal for first-time visitors
-  if (showLanguageModal) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
-        <LanguageSelectModal open={true} onSelect={handleLanguageSelect} />
-      </div>
-    )
+  function changeLanguage(chosen: Language) {
+    writePreference(LANGUAGE_KEY, chosen);
+    setLanguage(chosen);
+    dismissWelcome();
   }
 
-  // Safety check - should not happen but TypeScript needs it
-  if (!language) {
-    return null
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header language={language} onLanguageChange={handleLanguageChange} onTodayClick={handleTodayClick} />
-        <main className="flex-1 flex items-center justify-center p-4">
-          <Card className="max-w-md w-full">
-            <CardContent className="py-8 flex flex-col items-center text-center">
-              <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-              <h2 className="text-xl font-semibold mb-2">
-                {language === "ko"
-                  ? "오류가 발생했습니다"
-                  : language === "zh"
-                  ? "发生错误"
-                  : language === "sv"
-                  ? "Ett fel uppstod"
-                  : "An error occurred"}
-              </h2>
-              <p className="text-muted-foreground mb-4">{error}</p>
-              <Button onClick={() => window.location.reload()}>
-                {language === "ko"
-                  ? "다시 시도"
-                  : language === "zh"
-                  ? "重试"
-                  : language === "sv"
-                  ? "Försök igen"
-                  : "Try again"}
-              </Button>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    )
-  }
+  const today = now && dateInKorea(now);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
-      <Header language={language} onLanguageChange={handleLanguageChange} onTodayClick={handleTodayClick} />
+    <div className="flex min-h-screen flex-col">
+      <Header language={language} onLanguageChange={changeLanguage} onTodayClick={() => dateTabsRef.current?.goToToday()} />
 
-      <main className="flex-1 container max-w-2xl mx-auto px-4 py-6">
-        {isLoading ? (
-          <DateTabsSkeleton />
-        ) : days.length > 0 ? (
-          <DateTabs
-            ref={dateTabsRef}
-            initialDays={days}
-            language={language}
-            today={today}
-          />
-        ) : (
-          <EmptyMenuCard language={language} />
+      <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 py-5 sm:px-6 sm:py-7">
+        {showWelcome && (
+          <aside className="flex items-start gap-2">
+            <Image src={PENGUIN.welcome} alt="" width={48} height={48} className="shrink-0" />
+            <div className="menu-speech flex flex-1 items-start justify-between gap-1 rounded-xl px-3 py-2 text-sm leading-relaxed">
+              <p>{copy.welcome(LANGUAGES[language].name)}{" · "}
+                <button type="button" className="rounded-sm font-semibold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => document.getElementById(`${LANGUAGE_SWITCH_ID}-${language}`)?.focus()}>
+                  {copy.change}
+                </button>
+              </p>
+              <button type="button" onClick={dismissWelcome} aria-label={copy.close}
+                className="shrink-0 rounded-md p-1 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/10">
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+          </aside>
         )}
+        {today && now
+          ? <DateTabs key={today} ref={dateTabsRef} language={language} today={today} afterLunch={timeInKorea(now) >= "14:00"} />
+          : <MenuStatus state="loading" language={language} />}
       </main>
 
-      <footer className="py-6 border-t">
-        <div className="flex flex-col items-center gap-1.5">
-          <a
-            href="https://www.linkedin.com/in/sungwoonsong"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Made by Sungwoon Song
-          </a>
-          <p className="text-xs text-muted-foreground/60 text-center px-4 hidden sm:block">
-            Though I&apos;ve moved on from Ericsson, I hope this site helps my former colleagues enjoy their meals.
-          </p>
-        </div>
+      <footer className="border-t px-4 py-6 text-center">
+        <a href="https://www.linkedin.com/in/sungwoonsong" target="_blank" rel="noopener noreferrer"
+          className="rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Made by Sungwoon Song
+        </a>
       </footer>
     </div>
-  )
+  );
 }

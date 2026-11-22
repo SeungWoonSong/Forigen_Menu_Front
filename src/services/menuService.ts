@@ -1,286 +1,140 @@
-import { WeekMenu, DayMenu } from '@/types/menu';
-import { format, addDays, subDays, isWeekend } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { parseISO } from "date-fns";
+import type { DayMenu, Ingredient, Language, MenuInfo, MenuItem, SideItem, SpiceLevel } from "../types/menu";
+import { hasMenu } from "../lib/menu";
+import { ingredientLabels } from "../lib/menu-copy";
+import { readPreference, writePreference } from "../lib/browser-storage";
 
-// Korea Standard Time (UTC+9)
-const KST_TIMEZONE = "Asia/Seoul";
-
-// Format date in KST timezone
-function formatKST(date: Date, formatStr: string): string {
-  const kstDate = toZonedTime(date, KST_TIMEZONE);
-  return format(kstDate, formatStr);
-}
-
-// Use relative URL to go through Next.js API route (avoids CORS issues)
-const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    return ''; // Client-side: use relative URL
-  }
-  return process.env.NEXT_PUBLIC_API_URL || '';
-};
-
-export type Language = 'ko' | 'en' | 'zh' | 'sv';
-
-export const LANGUAGES = {
-  ko: '한국어',
-  en: 'English',
-  zh: '中文',
-  sv: 'Svenska'
-};
-
-interface CachedData {
+interface CachedMenu {
   data: DayMenu;
   timestamp: number;
-  isEmpty: boolean; // Track if this was an empty menu
+  isEmpty: boolean;
 }
 
-const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-const EMPTY_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for empty menus: upcoming days fill in once the backend crawls them
+const CACHE_DURATION = 6 * 60 * 60 * 1000;
+const EMPTY_CACHE_DURATION = 5 * 60 * 1000;
+const memoryCache = new Map<string, CachedMenu>();
 
-// Bump the version to drop everything browsers cached under older keys.
-const CACHE_PREFIX = 'menu-v2-day-';
-const LEGACY_CACHE_PREFIX = 'menu-day-';
-
-// In-memory cache for current session (avoids repeated localStorage parsing)
-const memoryCache = new Map<string, { data: DayMenu; timestamp: number; isEmpty: boolean }>();
-
-function getDayCacheKey(date: string, language: Language): string {
-  return `${CACHE_PREFIX}${date}-${language}`;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-// Older builds cached an empty menu whenever a request failed, so entries under
-// the legacy prefix can hide real menus. Remove them once per page load.
-let legacyCacheCleared = false;
-function clearLegacyMenuCache() {
-  if (legacyCacheCleared || typeof window === 'undefined') return;
-  legacyCacheCleared = true;
-  const legacyKeys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(LEGACY_CACHE_PREFIX)) legacyKeys.push(key);
-  }
-  legacyKeys.forEach(key => localStorage.removeItem(key));
+function optionalText(value: unknown) {
+  return typeof value === "string" ? value : undefined;
 }
 
-function isMenuEmpty(menu: DayMenu): boolean {
-  return menu.lunch.length === 0 && 
-         menu.dinner.length === 0 && 
-         !menu.salad && 
-         !menu.dessert;
+const ingredients = new Set<string>(Object.keys(ingredientLabels));
+
+function normalizeIngredients(value: unknown): Ingredient[] | undefined {
+  if (!Array.isArray(value)) return;
+  return value.filter((key): key is Ingredient => typeof key === "string" && ingredients.has(key));
 }
 
-function getFromDayCache(date: string, language: Language): DayMenu | null {
-  const key = getDayCacheKey(date, language);
-  const now = Date.now();
-  
-  // Check memory cache first (fastest)
-  const memoryCached = memoryCache.get(key);
-  if (memoryCached) {
-    const duration = memoryCached.isEmpty ? EMPTY_CACHE_DURATION : CACHE_DURATION;
-    if (now - memoryCached.timestamp <= duration) {
-      return memoryCached.data;
-    }
-    memoryCache.delete(key);
-  }
-  
-  // Check localStorage (persistent)
-  if (typeof window === 'undefined') return null;
-  
-  const cached = localStorage.getItem(key);
-  if (!cached) return null;
-
-  try {
-    const { data, timestamp, isEmpty }: CachedData = JSON.parse(cached);
-    const duration = isEmpty ? EMPTY_CACHE_DURATION : CACHE_DURATION;
-
-    if (now - timestamp > duration) {
-      localStorage.removeItem(key);
-      return null;
-    }
-
-    // Store in memory cache for faster subsequent access
-    memoryCache.set(key, { data, timestamp, isEmpty });
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-function setToDayCache(date: string, language: Language, data: DayMenu) {
-  const key = getDayCacheKey(date, language);
-  const isEmpty = isMenuEmpty(data);
-  const timestamp = Date.now();
-  
-  // Always update memory cache
-  memoryCache.set(key, { data, timestamp, isEmpty });
-  
-  // Update localStorage (persistent)
-  if (typeof window === 'undefined') return;
-  
-  const cacheData: CachedData = {
-    data,
-    timestamp,
-    isEmpty
+function normalizeDietaryInfo(value: Record<string, unknown>) {
+  const { spice, contains, may_contain, vegan } = value;
+  const spiceLevel: SpiceLevel | undefined = spice === 0 || spice === 1 || spice === 2 || spice === 3 ? spice : undefined;
+  return {
+    spice: spiceLevel,
+    contains: normalizeIngredients(contains),
+    may_contain: normalizeIngredients(may_contain),
+    vegan: typeof vegan === "boolean" ? vegan : undefined,
   };
+}
 
-  try {
-    localStorage.setItem(key, JSON.stringify(cacheData));
-  } catch (e) {
-    // localStorage might be full, clear old entries
-    console.warn('localStorage full, clearing old menu cache');
-    clearOldMenuCache();
+function normalizeMenuInfo(value: unknown): MenuInfo | undefined {
+  if (!isRecord(value)) return;
+  return {
+    ...normalizeDietaryInfo(value),
+    summary: optionalText(value.summary),
+    detail: optionalText(value.detail),
+    similar_to: optionalText(value.similar_to),
+    how_to_eat: optionalText(value.how_to_eat),
+    vegetarian: typeof value.vegetarian === "boolean" ? value.vegetarian : undefined,
+  };
+}
+
+function normalizeSideItems(value: unknown): SideItem[] | undefined {
+  if (!Array.isArray(value)) return;
+  return value.flatMap(item => {
+    if (!isRecord(item) || typeof item.name !== "string") return [];
+    return [{
+      name: item.name,
+      original_name: optionalText(item.original_name),
+      summary: optionalText(item.summary),
+      ...normalizeDietaryInfo(item),
+    }];
+  });
+}
+
+function normalizeMenuItem(value: unknown, index = 0): MenuItem | undefined {
+  if (!isRecord(value) || typeof value.name !== "string" || !Array.isArray(value.sub_menus)) return;
+  return {
+    id: typeof value.id === "number" && Number.isFinite(value.id) ? value.id : -(index + 1),
+    name: value.name,
+    meal_type: optionalText(value.meal_type) ?? "",
+    corner_name: optionalText(value.corner_name) ?? "",
+    description: optionalText(value.description) ?? "",
+    sub_menus: value.sub_menus.filter((name): name is string => typeof name === "string"),
+    original_name: optionalText(value.original_name),
+    info: normalizeMenuInfo(value.info),
+    sub_items: normalizeSideItems(value.sub_items),
+  };
+}
+
+export function normalizeDayMenu(value: unknown, date: string, language: Language): DayMenu | undefined {
+  if (!isRecord(value) || !Array.isArray(value.lunch) || !Array.isArray(value.dinner)) return;
+  const lunch = value.lunch.map(normalizeMenuItem);
+  const dinner = value.dinner.map(normalizeMenuItem);
+  if (!lunch.every(item => item !== undefined) || !dinner.every(item => item !== undefined)) return;
+
+  const updatedAt = optionalText(value.updated_at);
+  return {
+    // The requested tab and language remain authoritative for the view and cache.
+    date,
+    language,
+    lunch,
+    dinner,
+    salad: normalizeMenuItem(value.salad) ?? null,
+    dessert: normalizeMenuItem(value.dessert) ?? null,
+    updated_at: updatedAt && updatedAt.includes("T") && Number.isFinite(parseISO(updatedAt).getTime()) ? updatedAt : undefined,
+  };
+}
+
+function getCachedMenu(key: string, date: string, language: Language): DayMenu | undefined {
+  let cached = memoryCache.get(key);
+  if (!cached) {
+    const stored = readPreference(key);
+    if (!stored) return;
     try {
-      localStorage.setItem(key, JSON.stringify(cacheData));
+      const entry: unknown = JSON.parse(stored);
+      if (!isRecord(entry) || typeof entry.timestamp !== "number" || !Number.isFinite(entry.timestamp)) return;
+      const data = normalizeDayMenu(entry.data, date, language);
+      if (data) cached = { data, timestamp: entry.timestamp, isEmpty: !hasMenu(data) };
     } catch {
-      // Still failed, just use memory cache
+      return;
     }
   }
-}
-
-// Clear old menu cache entries when localStorage is full
-function clearOldMenuCache() {
-  if (typeof window === 'undefined') return;
-  
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(CACHE_PREFIX)) {
-      keysToRemove.push(key);
-    }
+  if (!cached) return;
+  const duration = cached.isEmpty ? EMPTY_CACHE_DURATION : CACHE_DURATION;
+  if (Date.now() - cached.timestamp <= duration) {
+    memoryCache.set(key, cached);
+    return cached.data;
   }
-  
-  // Remove oldest half of menu cache entries
-  keysToRemove
-    .sort()
-    .slice(0, Math.ceil(keysToRemove.length / 2))
-    .forEach(key => localStorage.removeItem(key));
+  memoryCache.delete(key);
 }
 
-export function hasMenu(menu: DayMenu): boolean {
-  return !isMenuEmpty(menu);
-}
+export async function getDayMenu(date: string, language: Language): Promise<DayMenu> {
+  const key = `menu-v2-day-${date}-${language}`;
+  const cached = getCachedMenu(key, date, language);
+  if (cached) return cached;
 
-// The tab to open by default: today if it has a menu, otherwise the next day
-// that has one (weekends, holidays), otherwise the most recent day that had one.
-export function pickDefaultDate(days: DayMenu[], today: string): string {
-  const todayMenu = days.find(d => d.date === today);
-  if (todayMenu && hasMenu(todayMenu)) return today;
-  const upcoming = days.find(d => d.date > today && hasMenu(d));
-  if (upcoming) return upcoming.date;
-  const past = [...days].reverse().find(d => d.date < today && hasMenu(d));
-  if (past) return past.date;
-  if (todayMenu) return today;
-  return days.length > 0 ? days[Math.floor(days.length / 2)].date : today;
-}
+  // Cache confirmed menus and confirmed empty dates only.
+  const response = await fetch(`/api/menu/${date}?lang=${language}`);
+  if (!response.ok) throw new Error(`Menu request failed with HTTP ${response.status}`);
+  const data = normalizeDayMenu(await response.json(), date, language);
+  if (!data) throw new Error("Invalid menu response");
 
-// Fetch a single day menu
-export async function getDayMenu(date: Date, language: Language): Promise<DayMenu> {
-  const formattedDate = formatKST(date, 'yyyyMMdd');
-
-  clearLegacyMenuCache();
-
-  // Check cache first (memory + localStorage)
-  const cached = getFromDayCache(formattedDate, language);
-  if (cached) {
-    return cached;
-  }
-
-  // A failed request must surface as an error. Returning (and caching) an empty
-  // menu here made outages look like "no menu today" long after they ended.
-  const apiUrl = getApiUrl();
-  const response = await fetch(`${apiUrl}/api/menu/${formattedDate}?lang=${language}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch menu for ${formattedDate}`);
-  }
-
-  const dayMenu: DayMenu = await response.json();
-  setToDayCache(formattedDate, language, dayMenu);
-  return dayMenu;
-}
-
-// Get the nearest weekday (skip weekends)
-function getNearestWeekday(date: Date, direction: 'forward' | 'backward'): Date {
-  let result = date;
-  while (isWeekend(result)) {
-    result = direction === 'forward' ? addDays(result, 1) : subDays(result, 1);
-  }
-  return result;
-}
-
-// Get N weekdays before a date
-function getWeekdaysBefore(date: Date, count: number): Date[] {
-  const dates: Date[] = [];
-  let current = subDays(date, 1);
-  
-  while (dates.length < count) {
-    if (!isWeekend(current)) {
-      dates.unshift(current);
-    }
-    current = subDays(current, 1);
-  }
-  
-  return dates;
-}
-
-// Get N weekdays after a date
-function getWeekdaysAfter(date: Date, count: number): Date[] {
-  const dates: Date[] = [];
-  let current = addDays(date, 1);
-  
-  while (dates.length < count) {
-    if (!isWeekend(current)) {
-      dates.push(current);
-    }
-    current = addDays(current, 1);
-  }
-  
-  return dates;
-}
-
-// Fetch menu centered around a specific date with ±N days
-export async function getCenteredMenu(
-  centerDate: Date = new Date(),
-  daysBefore: number = 2,
-  daysAfter: number = 2,
-  language: Language = 'en'
-): Promise<WeekMenu> {
-  // On a weekend, centre on the coming Monday: that is the next menu people want.
-  const adjustedCenter = getNearestWeekday(centerDate, 'forward');
-  
-  // Get dates before and after
-  const datesBefore = getWeekdaysBefore(adjustedCenter, daysBefore);
-  const datesAfter = getWeekdaysAfter(adjustedCenter, daysAfter);
-  
-  // Combine all dates
-  const allDates = [...datesBefore, adjustedCenter, ...datesAfter];
-  
-  // Fetch all menus in parallel
-  const dayMenus = await Promise.all(
-    allDates.map(date => getDayMenu(date, language))
-  );
-  
-  return { days: dayMenus };
-}
-
-// Fetch additional days (for lazy loading when scrolling)
-export async function getAdditionalDays(
-  referenceDate: Date,
-  direction: 'before' | 'after',
-  count: number,
-  language: Language
-): Promise<DayMenu[]> {
-  const dates = direction === 'before' 
-    ? getWeekdaysBefore(referenceDate, count)
-    : getWeekdaysAfter(referenceDate, count);
-  
-  const dayMenus = await Promise.all(
-    dates.map(date => getDayMenu(date, language))
-  );
-  
-  return dayMenus;
-}
-
-// Legacy function for backward compatibility
-export async function getWeeklyMenu(date: Date = new Date(), language: Language = 'en'): Promise<WeekMenu> {
-  return getCenteredMenu(date, 2, 2, language);
+  const entry: CachedMenu = { data, timestamp: Date.now(), isEmpty: !hasMenu(data) };
+  memoryCache.set(key, entry);
+  writePreference(key, JSON.stringify(entry));
+  return data;
 }

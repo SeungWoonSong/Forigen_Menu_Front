@@ -1,275 +1,150 @@
-"use client"
+"use client";
 
-import { DayMenu } from "@/types/menu"
-import { Language, getAdditionalDays, pickDefaultDate } from "@/services/menuService"
-import { format, parse } from "date-fns"
-import { ko, enUS, zhCN, sv } from "date-fns/locale"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs"
-import { Button } from "./ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { MenuCard, MenuCardSkeleton, EmptyMenuCard } from "./MenuCard"
-import { cn } from "@/lib/utils"
-import Image from "next/image"
-
-interface DateTabsProps {
-  initialDays: DayMenu[]
-  language: Language
-  today: string
-}
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Language } from "../types/menu";
+import { dateLabel, initialMenuDates, isClosedDay, menuState, nextBusinessDay, pickDefaultDate, shiftDay } from "../lib/menu";
+import type { MenuRequest, MenuRequests } from "../lib/menu";
+import { menuCopy } from "../lib/menu-copy";
+import { getDayMenu } from "../services/menuService";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Button } from "./ui/button";
+import { MenuCard } from "./MenuCard";
+import { MenuStatus } from "./MenuStatus";
 
 export interface DateTabsRef {
-  goToToday: () => void
+  goToToday: () => void;
 }
 
-const locales = {
-  ko,
-  en: enUS,
-  zh: zhCN,
-  sv,
+interface DateTabsProps {
+  language: Language;
+  today: string;
+  afterLunch: boolean;
 }
+
+const noResults: MenuRequests = {};
 
 export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs(
-  { initialDays, language, today },
-  ref
+  { language, today, afterLunch }, ref,
 ) {
-  const [days, setDays] = useState<DayMenu[]>(initialDays)
-  const [selectedDate, setSelectedDate] = useState<string>(() => pickDefaultDate(initialDays, today))
-  const [isLoadingLeft, setIsLoadingLeft] = useState(false)
-  const [isLoadingRight, setIsLoadingRight] = useState(false)
-  const tabsListRef = useRef<HTMLDivElement>(null)
+  const [initialDates] = useState(() => initialMenuDates(today));
+  const [dates, setDates] = useState(initialDates);
+  const [selection, setSelection] = useState<string>();
+  const [requests, setRequests] = useState<Partial<Record<Language, MenuRequests>>>({});
+  const pending = useRef(new Set<string>());
+  const list = useRef<HTMLDivElement>(null);
+  const results = requests[language] ?? noResults;
+  const copy = menuCopy[language];
+  const closedToday = isClosedDay(today);
+  const upcomingBusinessDay = nextBusinessDay(today);
+  const tomorrow = shiftDay(today, 1);
+  const initialReady = initialDates.every(date => isClosedDay(date) || results[date]);
+  const defaultDate = initialReady
+    ? pickDefaultDate(initialDates, today, results)
+    : closedToday ? upcomingBusinessDay : today;
+  const selected = selection ?? defaultDate;
 
-  // The tab to bring into view on load: today on a normal day, the default date otherwise
-  const focusIndex = days.findIndex(d => d.date === selectedDate)
-  
-  // Track if initial scroll has happened
-  const hasInitialScrolled = useRef(false)
-
-  // Expose goToToday method via ref
-  useImperativeHandle(ref, () => ({
-    goToToday: () => {
-      // On weekends and holidays there is no menu today: go to the nearest day that has one
-      const target = pickDefaultDate(days, today)
-      const targetIndex = days.findIndex(d => d.date === target)
-      setSelectedDate(target)
-      if (tabsListRef.current && targetIndex >= 0) {
-        const container = tabsListRef.current
-        const tabs = container.querySelectorAll('[role="tab"]')
-        const todayTab = tabs[targetIndex] as HTMLElement
-        
-        if (todayTab) {
-          todayTab.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-            inline: 'center'
-          })
-        }
-      }
-    }
-  }), [today, days])
-
-  // Update days when initialDays change (language change)
   useEffect(() => {
-    setDays(initialDays)
-    // Reset to today, or to the nearest day with a menu on weekends and holidays
-    setSelectedDate(pickDefaultDate(initialDays, today))
-    // Reset scroll flag when language changes
-    hasInitialScrolled.current = false
-  }, [initialDays, today])
+    for (const date of dates) {
+      const key = `${language}-${date}`;
+      if (isClosedDay(date) || results[date] || pending.current.has(key)) continue;
 
-  const formatTabDate = (dateStr: string) => {
-    const date = parse(dateStr, "yyyyMMdd", new Date())
-    const locale = locales[language]
-
-    switch (language) {
-      case "ko":
-        return format(date, "M/d (EEE)", { locale })
-      case "zh":
-        return format(date, "M/d EEE", { locale })
-      case "sv":
-        return format(date, "d/M EEE", { locale })
-      default:
-        return format(date, "M/d EEE", { locale })
+      pending.current.add(key);
+      const settle = (result: MenuRequest) => {
+        pending.current.delete(key);
+        setRequests(current => ({ ...current, [language]: { ...current[language], [date]: result } }));
+      };
+      getDayMenu(date, language).then(
+        menu => settle({ status: "ready", menu }),
+        () => settle({ status: "error" }),
+      );
     }
+  }, [dates, language, results]);
+
+  useEffect(() => {
+    if (initialReady) setSelection(current => current ?? defaultDate);
+  }, [initialReady, defaultDate]);
+
+  useEffect(() => {
+    const strip = list.current;
+    const active = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (strip && active) {
+      strip.scrollLeft += active.getBoundingClientRect().left - strip.getBoundingClientRect().left
+        - (strip.clientWidth - active.offsetWidth) / 2;
+    }
+  }, [selected, dates]);
+
+  function navigate(date: string) {
+    setDates(current => {
+      if (current.includes(date)) return current;
+      const earlier: string[] = [];
+      const later: string[] = [];
+      for (let day = shiftDay(current[0], -1); day >= date; day = shiftDay(day, -1)) earlier.unshift(day);
+      for (let day = shiftDay(current[current.length - 1], 1); day <= date; day = shiftDay(day, 1)) later.push(day);
+      return [...earlier, ...current, ...later];
+    });
+    setSelection(date);
   }
 
-  // Load more days to the left (past)
-  const loadMoreLeft = useCallback(async () => {
-    if (isLoadingLeft || days.length === 0) return
-    
-    setIsLoadingLeft(true)
-    try {
-      const firstDate = parse(days[0].date, "yyyyMMdd", new Date())
-      const newDays = await getAdditionalDays(firstDate, "before", 2, language)
-      setDays(prev => [...newDays, ...prev])
-    } catch (error) {
-      console.error("Failed to load more days:", error)
-    } finally {
-      setIsLoadingLeft(false)
-    }
-  }, [days, language, isLoadingLeft])
+  useImperativeHandle(ref, () => ({
+    goToToday: () => setSelection(initialReady ? defaultDate : undefined),
+  }), [defaultDate, initialReady]);
 
-  // Load more days to the right (future)
-  const loadMoreRight = useCallback(async () => {
-    if (isLoadingRight || days.length === 0) return
-    
-    setIsLoadingRight(true)
-    try {
-      const lastDate = parse(days[days.length - 1].date, "yyyyMMdd", new Date())
-      const newDays = await getAdditionalDays(lastDate, "after", 2, language)
-      setDays(prev => [...prev, ...newDays])
-    } catch (error) {
-      console.error("Failed to load more days:", error)
-    } finally {
-      setIsLoadingRight(false)
-    }
-  }, [days, language, isLoadingRight])
-
-  // Scroll to center on the selected tab only on initial mount or language change
-  useEffect(() => {
-    if (tabsListRef.current && focusIndex >= 0 && !hasInitialScrolled.current) {
-      // Wait for layout to be fully calculated
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const container = tabsListRef.current
-          if (!container) return
-          
-          const tabs = container.querySelectorAll('[role="tab"]')
-          const focusTab = tabs[focusIndex] as HTMLElement
-          
-          if (focusTab) {
-            // Use scrollIntoView for more accurate centering
-            focusTab.scrollIntoView({
-              behavior: 'smooth',
-              block: 'nearest',
-              inline: 'center'
-            })
-            
-            hasInitialScrolled.current = true
-          }
-        })
-      })
-    }
-  }, [focusIndex, days])
-
-  const selectedMenu = days.find(d => d.date === selectedDate)
+  const businessLabel = (date: string) => copy.nextBusiness(dateLabel(date, language));
+  function retry(date: string) {
+    setSelection(date);
+    setRequests(current => ({ ...current, [language]: { ...current[language], [date]: undefined } }));
+  }
 
   return (
-    <Tabs value={selectedDate} onValueChange={setSelectedDate} className="w-full">
-      <div className="relative flex items-center gap-2 mb-4">
-        {/* Left navigation button */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-10 w-10 shrink-0 rounded-full"
-          onClick={loadMoreLeft}
-          disabled={isLoadingLeft}
-        >
-          {isLoadingLeft ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
-
-        {/* Tabs list */}
-        <TabsList ref={tabsListRef} className="flex-1 justify-center">
-          {days.map((day) => (
-            <TabsTrigger
-              key={day.date}
-              value={day.date}
-              className={cn(
-                "min-w-[80px] sm:min-w-[100px] group",
-                day.date === today &&
-                  "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-              )}
-            >
-              <span className="flex flex-col items-center gap-1">
-                <span className="text-xs sm:text-sm">{formatTabDate(day.date)}</span>
-                {day.date === today && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary group-data-[state=active]:bg-primary-foreground transition-colors" />
-                )}
-              </span>
-            </TabsTrigger>
-          ))}
+    <Tabs value={selected} onValueChange={navigate} activationMode="manual" className="space-y-4">
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <Button type="button" variant="outline" size="icon" aria-label={copy.earlier} className="h-9 w-8 shrink-0 rounded-xl bg-card"
+          onClick={() => navigate(shiftDay(selected, -1))}><ChevronLeft size={17} aria-hidden="true" /></Button>
+        <TabsList ref={list} aria-label={copy.dates} className="h-auto min-w-0 bg-card ring-1 ring-inset ring-border">
+          {dates.map(date => {
+            const relative = date === today ? copy.today : date === tomorrow ? copy.tomorrow : undefined;
+            const available = menuState(date, today, results[date]) === "menu";
+            return (
+              <TabsTrigger key={date} value={date}
+                className="flex min-h-12 flex-1 flex-col gap-0.5 px-2 py-1 text-xs focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] sm:px-3">
+                <span className="flex items-center gap-1.5">
+                  {dateLabel(date, language, true)}
+                  {available && <><span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" /><span className="sr-only">{copy.available}</span></>}
+                </span>
+                {relative && <span className="text-[11px] font-semibold">{relative}</span>}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
-
-        {/* Right navigation button */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-10 w-10 shrink-0 rounded-full"
-          onClick={loadMoreRight}
-          disabled={isLoadingRight}
-        >
-          {isLoadingRight ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </Button>
+        <Button type="button" variant="outline" size="icon" aria-label={copy.later} className="h-9 w-8 shrink-0 rounded-xl bg-card"
+          onClick={() => navigate(shiftDay(selected, 1))}><ChevronRight size={17} aria-hidden="true" /></Button>
       </div>
 
-      <AnimatePresence mode="wait">
-        {days.map((day) => (
-          <TabsContent key={day.date} value={day.date} className="mt-0">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {day.lunch.length > 0 ||
-              day.dinner.length > 0 ||
-              day.salad ||
-              day.dessert ? (
-                <MenuCard menu={day} />
-              ) : (
-                <EmptyMenuCard language={language} />
-              )}
-            </motion.div>
+      {closedToday && selected !== today && (
+        <aside className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-[hsl(var(--menu-accent))] px-4 py-3 text-sm text-[hsl(var(--menu-accent-foreground))]">
+          <span className="font-semibold">{copy.closed} <span aria-hidden="true">·</span></span>
+          <button type="button" onClick={() => navigate(upcomingBusinessDay)}
+            className="rounded-sm text-left underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {businessLabel(upcomingBusinessDay)}
+          </button>
+        </aside>
+      )}
+
+      {dates.map(date => {
+        const result = results[date];
+        const state = !selection && !initialReady ? "loading" : menuState(date, today, result);
+        const businessDate = nextBusinessDay(date);
+        const action = state === "closed" ? { label: businessLabel(businessDate), onClick: () => navigate(businessDate) } :
+          state === "error" ? { label: copy.retry, onClick: () => retry(date) } : undefined;
+        return (
+          <TabsContent key={date} value={date} className="mt-0">
+            {state === "menu" && result?.status === "ready"
+              ? <MenuCard menu={result.menu} language={language} dinnerFirst={date === today && afterLunch} />
+              : <MenuStatus state={state === "menu" ? "loading" : state} language={language} closedToday={date === today} action={action} />}
           </TabsContent>
-        ))}
-      </AnimatePresence>
+        );
+      })}
     </Tabs>
-  )
-})
-
-export function DateTabsSkeleton() {
-  return (
-    <div className="space-y-4">
-      {/* Mascot Loading Animation */}
-      <div className="flex flex-col items-center justify-center py-6">
-        <motion.div
-          animate={{
-            y: [0, -8, 0],
-          }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        >
-          <Image
-            src="/Loading.png"
-            alt="Loading..."
-            width={200}
-            height={200}
-            className="drop-shadow-lg"
-            priority
-          />
-        </motion.div>
-      </div>
-      
-      {/* Tabs Skeleton */}
-      <div className="flex items-center gap-2">
-        <div className="h-10 w-10 rounded-full bg-muted animate-pulse shrink-0" />
-        <div className="flex-1 h-12 bg-muted animate-pulse rounded-xl" />
-        <div className="h-10 w-10 rounded-full bg-muted animate-pulse shrink-0" />
-      </div>
-      <MenuCardSkeleton />
-    </div>
-  )
-}
-
+  );
+});
