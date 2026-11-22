@@ -28,6 +28,20 @@ export const mainDish: MenuItem = {
   ],
 };
 
+export const koreanDish: MenuItem = {
+  id: 3,
+  name: "오색비빔밥*계란후라이",
+  original_name: "오색비빔밥*계란후라이",
+  meal_type: "중식",
+  corner_name: "코너1",
+  description: "",
+  sub_menus: [],
+  sub_items: [
+    { name: "약고추장", original_name: "약고추장", summary: "고기를 넣어 볶은 고추장 양념" },
+    { name: "계란 후라이", original_name: "달걀부침", summary: "기름에 부친 계란" },
+  ],
+};
+
 export function emptyMenu(date: string, language: Language = "en"): DayMenu {
   return { date, language, lunch: [], dinner: [], dessert: null, salad: null };
 }

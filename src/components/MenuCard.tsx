@@ -2,7 +2,7 @@ import Image from "next/image";
 import { Moon, Salad, Soup, Sun } from "lucide-react";
 import { useId } from "react";
 import type { DayMenu, Language, MenuItem } from "../types/menu";
-import { cornerLabel, dateLabel, extraMenuChips, extraMenuMeal, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
+import { cornerLabel, dateLabel, displayOriginalName, extraMenuChips, extraMenuMeal, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import { DietaryTags } from "./DietaryTags";
 import { SideChips } from "./SideChips";
@@ -23,15 +23,16 @@ function DishCard({ item, language }: { item: MenuItem; language: Language }) {
   const copy = menuCopy[language];
   const { info } = item;
   const detail = info?.detail || item.description;
+  const originalName = displayOriginalName(item, language);
 
   return (
     <article className="min-w-0 space-y-3 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-      {(item.corner_name || item.original_name) && (
+      {(item.corner_name || originalName) && (
         <div className="flex items-baseline justify-between gap-3">
           {item.corner_name && <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
             {cornerLabel(item.corner_name, language)}
           </span>}
-          {item.original_name && <span lang="ko" className="ml-auto text-right text-xs text-muted-foreground">{item.original_name}</span>}
+          {originalName && <span lang="ko" className="ml-auto text-right text-xs text-muted-foreground">{originalName}</span>}
         </div>
       )}
       <div className="space-y-1.5">

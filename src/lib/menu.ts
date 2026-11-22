@@ -120,6 +120,14 @@ export function cornerLabel(corner: string, language: Language) {
   return { ko: `코너${number}`, en: `Corner ${number}`, zh: `${number}号窗口`, sv: `Disk ${number}` }[language];
 }
 
+export function displayOriginalName(item: Pick<SideItem, "name" | "original_name">, language: Language) {
+  if (language === "ko" || !item.original_name) return undefined;
+
+  const normalize = (name: string) => name.trim().replace(/\s+/g, " ");
+  const original = normalize(item.original_name);
+  return original && original !== normalize(item.name) ? item.original_name : undefined;
+}
+
 const staples = new Set(["밥", "쌀밥", "백미밥", "현미밥", "잡곡밥", "흑미밥", "김치", "배추김치", "깍두기", "석박지", "섞박지"]);
 
 export function isStaple(originalName?: string) {

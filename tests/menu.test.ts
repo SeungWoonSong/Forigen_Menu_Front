@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  cornerLabel, dateInKorea, extraMenuChips, extraMenuMeal, initialMenuDates, isClosedDay, isStaple,
+  cornerLabel, dateInKorea, displayOriginalName, extraMenuChips, extraMenuMeal, initialMenuDates, isClosedDay, isStaple,
   menuState, nextBusinessDay, pickDefaultDate, selectLanguage, sideItems, timeInKorea,
 } from "../src/lib/menu";
 import type { MenuRequest } from "../src/lib/menu";
@@ -9,6 +9,16 @@ import { normalizeDayMenu } from "../src/services/menuService";
 import { emptyMenu, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
 
 const ready = (menu: ReturnType<typeof emptyMenu>): MenuRequest => ({ status: "ready", menu });
+
+test("shows original names only for other languages with a distinct display name", () => {
+  const dish = { name: "Mushroom hot pot", original_name: "버섯전골" };
+  assert.equal(displayOriginalName(dish, "ko"), undefined);
+  assert.equal(displayOriginalName(dish, "en"), "버섯전골");
+  assert.equal(displayOriginalName({ name: " 약고추장 ", original_name: "약고추장" }, "zh"), undefined);
+  assert.equal(displayOriginalName({ name: "계란 후라이 ", original_name: " 계란\t\u00a0후라이\n" }, "sv"), undefined);
+  assert.equal(displayOriginalName({ name: "버섯전골", original_name: "   " }, "en"), undefined);
+  assert.equal(displayOriginalName({ name: "버섯전골" }, "en"), undefined);
+});
 
 test("observes Korean calendar and time across UTC day and meal boundaries", () => {
   assert.equal(dateInKorea(new Date("2026-11-22T14:59:59Z")), "20261122");
