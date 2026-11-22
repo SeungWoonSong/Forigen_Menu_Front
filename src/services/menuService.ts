@@ -35,13 +35,31 @@ interface CachedData {
 }
 
 const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-const EMPTY_CACHE_DURATION = 1 * 60 * 60 * 1000; // 1 hour for empty menus (shorter to check for updates)
+const EMPTY_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for empty menus: upcoming days fill in once the backend crawls them
+
+// Bump the version to drop everything browsers cached under older keys.
+const CACHE_PREFIX = 'menu-v2-day-';
+const LEGACY_CACHE_PREFIX = 'menu-day-';
 
 // In-memory cache for current session (avoids repeated localStorage parsing)
 const memoryCache = new Map<string, { data: DayMenu; timestamp: number; isEmpty: boolean }>();
 
 function getDayCacheKey(date: string, language: Language): string {
-  return `menu-day-${date}-${language}`;
+  return `${CACHE_PREFIX}${date}-${language}`;
+}
+
+// Older builds cached an empty menu whenever a request failed, so entries under
+// the legacy prefix can hide real menus. Remove them once per page load.
+let legacyCacheCleared = false;
+function clearLegacyMenuCache() {
+  if (legacyCacheCleared || typeof window === 'undefined') return;
+  legacyCacheCleared = true;
+  const legacyKeys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(LEGACY_CACHE_PREFIX)) legacyKeys.push(key);
+  }
+  legacyKeys.forEach(key => localStorage.removeItem(key));
 }
 
 function isMenuEmpty(menu: DayMenu): boolean {
@@ -126,7 +144,7 @@ function clearOldMenuCache() {
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key?.startsWith('menu-day-')) {
+    if (key?.startsWith(CACHE_PREFIX)) {
       keysToRemove.push(key);
     }
   }
@@ -138,42 +156,46 @@ function clearOldMenuCache() {
     .forEach(key => localStorage.removeItem(key));
 }
 
+export function hasMenu(menu: DayMenu): boolean {
+  return !isMenuEmpty(menu);
+}
+
+// The tab to open by default: today if it has a menu, otherwise the next day
+// that has one (weekends, holidays), otherwise the most recent day that had one.
+export function pickDefaultDate(days: DayMenu[], today: string): string {
+  const todayMenu = days.find(d => d.date === today);
+  if (todayMenu && hasMenu(todayMenu)) return today;
+  const upcoming = days.find(d => d.date > today && hasMenu(d));
+  if (upcoming) return upcoming.date;
+  const past = [...days].reverse().find(d => d.date < today && hasMenu(d));
+  if (past) return past.date;
+  if (todayMenu) return today;
+  return days.length > 0 ? days[Math.floor(days.length / 2)].date : today;
+}
+
 // Fetch a single day menu
 export async function getDayMenu(date: Date, language: Language): Promise<DayMenu> {
   const formattedDate = formatKST(date, 'yyyyMMdd');
-  
+
+  clearLegacyMenuCache();
+
   // Check cache first (memory + localStorage)
   const cached = getFromDayCache(formattedDate, language);
   if (cached) {
     return cached;
   }
 
-  try {
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/menu/${formattedDate}?lang=${language}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch menu for ${formattedDate}`);
-    }
-    
-    const dayMenu = await response.json();
-    // Cache the menu (including empty ones)
-    setToDayCache(formattedDate, language, dayMenu);
-    return dayMenu;
-  } catch (error) {
-    console.error(`Error fetching menu for ${formattedDate}:`, error);
-    // Return empty menu for this day and cache it (shorter duration)
-    const emptyMenu: DayMenu = {
-      date: formattedDate,
-      language,
-      lunch: [],
-      dinner: [],
-      dessert: null,
-      salad: null,
-    };
-    // Cache empty menu too (will have shorter cache duration)
-    setToDayCache(formattedDate, language, emptyMenu);
-    return emptyMenu;
+  // A failed request must surface as an error. Returning (and caching) an empty
+  // menu here made outages look like "no menu today" long after they ended.
+  const apiUrl = getApiUrl();
+  const response = await fetch(`${apiUrl}/api/menu/${formattedDate}?lang=${language}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch menu for ${formattedDate}`);
   }
+
+  const dayMenu: DayMenu = await response.json();
+  setToDayCache(formattedDate, language, dayMenu);
+  return dayMenu;
 }
 
 // Get the nearest weekday (skip weekends)
@@ -222,8 +244,8 @@ export async function getCenteredMenu(
   daysAfter: number = 2,
   language: Language = 'en'
 ): Promise<WeekMenu> {
-  // Adjust center date to nearest weekday if it's a weekend
-  const adjustedCenter = getNearestWeekday(centerDate, 'backward');
+  // On a weekend, centre on the coming Monday: that is the next menu people want.
+  const adjustedCenter = getNearestWeekday(centerDate, 'forward');
   
   // Get dates before and after
   const datesBefore = getWeekdaysBefore(adjustedCenter, daysBefore);

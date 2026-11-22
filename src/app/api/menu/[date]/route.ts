@@ -11,7 +11,7 @@ interface ServerCacheEntry {
 
 const serverCache = new Map<string, ServerCacheEntry>();
 const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-const EMPTY_CACHE_DURATION = 1 * 60 * 60 * 1000; // 1 hour for empty menus
+const EMPTY_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for empty menus: they fill in once the backend crawls that day
 
 // Clean up old cache entries periodically
 function cleanupCache() {
@@ -65,8 +65,9 @@ export const GET = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      // Next.js built-in cache - revalidate every hour
-      next: { revalidate: 3600 },
+      // Caching happens above (in-memory) and below (Cache-Control); a second
+      // layer here kept serving empty menus after the backend had data.
+      cache: 'no-store',
     });
     
     if (!response.ok) {
@@ -90,7 +91,7 @@ export const GET = async (
     }
     
     // Return with cache headers for CDN/browser caching
-    const cacheDuration = isEmpty ? 3600 : 21600; // 1 hour for empty, 6 hours for full
+    const cacheDuration = isEmpty ? 300 : 21600; // 5 minutes for empty, 6 hours for full
     return NextResponse.json(data, {
       headers: {
         'Cache-Control': `public, max-age=${cacheDuration}, s-maxage=${cacheDuration}, stale-while-revalidate=60`,
