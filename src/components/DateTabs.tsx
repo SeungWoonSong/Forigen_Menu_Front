@@ -3,7 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Language } from "../types/menu";
-import { dateLabel, initialMenuDates, isClosedDay, menuState, nextBusinessDay, pickDefaultDate, shiftDay } from "../lib/menu";
+import { dateLabel, dateTabLabel, initialMenuDates, isClosedDay, menuState, nextBusinessDay, pickDefaultDate, shiftDay } from "../lib/menu";
 import type { MenuRequest, MenuRequests } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import { getDayMenu } from "../services/menuService";
@@ -69,10 +69,15 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     const strip = list.current;
     const active = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (strip && active) {
-      strip.scrollLeft += active.getBoundingClientRect().left - strip.getBoundingClientRect().left
+      const bounds = strip.getBoundingClientRect();
+      const centerOffset = active.getBoundingClientRect().left - bounds.left
         - (strip.clientWidth - active.offsetWidth) / 2;
+      const next = selected === today ? active.nextElementSibling : null;
+      strip.scrollLeft += next
+        ? Math.max(centerOffset, next.getBoundingClientRect().right - bounds.right)
+        : centerOffset;
     }
-  }, [selected, dates]);
+  }, [selected, dates, language, initialReady, today]);
 
   function navigate(date: string) {
     setDates(current => {
@@ -103,16 +108,12 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
           onClick={() => navigate(shiftDay(selected, -1))}><ChevronLeft size={17} aria-hidden="true" /></Button>
         <TabsList ref={list} aria-label={copy.dates} className="h-auto min-w-0 bg-card ring-1 ring-inset ring-border">
           {dates.map(date => {
-            const relative = date === today ? copy.today : date === tomorrow ? copy.tomorrow : undefined;
             const available = menuState(date, today, results[date]) === "menu";
             return (
-              <TabsTrigger key={date} value={date}
-                className="flex min-h-12 flex-1 flex-col gap-0.5 px-2 py-1 text-xs focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] sm:px-3">
-                <span className="flex items-center gap-1.5">
-                  {dateLabel(date, language, true)}
-                  {available && <><span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" /><span className="sr-only">{copy.available}</span></>}
-                </span>
-                {relative && <span className="text-[11px] font-semibold">{relative}</span>}
+              <TabsTrigger key={date} value={date} aria-current={date === today ? "date" : undefined}
+                className="relative h-7 flex-1 gap-1.5 whitespace-nowrap px-2 py-0 text-xs aria-[current=date]:font-bold aria-[current=date]:text-foreground focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] sm:px-3">
+                <span>{dateTabLabel(date, language, today, tomorrow)}</span>
+                {available && <><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-400" /><span className="sr-only">{copy.available}</span></>}
               </TabsTrigger>
             );
           })}
