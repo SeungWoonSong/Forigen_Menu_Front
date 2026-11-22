@@ -15,11 +15,11 @@ export function DietaryTags({ info, language }: { info?: MenuInfo; language: Lan
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {spice && <span className={`${tag} border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-200`}>
+      {spice && <span className={`${tag} bg-muted`}>
         <Flame size={13} aria-hidden="true" />{spice}
       </span>}
-      {info.vegetarian && <span className={`${tag} text-emerald-800 dark:text-emerald-200`}><Leaf size={13} aria-hidden="true" />{copy.vegetarian}</span>}
-      {info.vegan && <span className={`${tag} text-emerald-800 dark:text-emerald-200`}><Leaf size={13} aria-hidden="true" />{copy.vegan}</span>}
+      {info.vegetarian && <span className={tag}><Leaf size={13} aria-hidden="true" />{copy.vegetarian}</span>}
+      {info.vegan && <span className={tag}><Leaf size={13} aria-hidden="true" />{copy.vegan}</span>}
       {contains && <span className={`${tag} bg-muted`}>{copy.contains(contains)}</span>}
       {mayContain && <span className={`${tag} border-dashed text-muted-foreground`}>{copy.mayContain(mayContain)}</span>}
       <span className="text-xs text-muted-foreground">{copy.estimated}</span>

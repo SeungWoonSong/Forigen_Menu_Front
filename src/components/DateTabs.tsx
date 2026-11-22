@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Language } from "../types/menu";
 import { dateLabel, dateTabLabel, initialMenuDates, isClosedDay, menuState, nextBusinessDay, pickDefaultDate, shiftDay } from "../lib/menu";
@@ -65,19 +65,32 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     if (initialReady) setSelection(current => current ?? defaultDate);
   }, [initialReady, defaultDate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const strip = list.current;
     const active = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (strip && active) {
-      const bounds = strip.getBoundingClientRect();
-      const centerOffset = active.getBoundingClientRect().left - bounds.left
-        - (strip.clientWidth - active.offsetWidth) / 2;
-      const next = selected === today ? active.nextElementSibling : null;
-      strip.scrollLeft += next
-        ? Math.max(centerOffset, next.getBoundingClientRect().right - bounds.right)
-        : centerOffset;
-    }
-  }, [selected, dates, language, initialReady, today]);
+    if (!strip || !active || strip.scrollWidth <= strip.clientWidth) return;
+
+    const viewportWidth = strip.clientWidth;
+    const maxScroll = strip.scrollWidth - viewportWidth;
+    const origin = strip.getBoundingClientRect().left - strip.scrollLeft;
+    const inset = parseFloat(getComputedStyle(strip).scrollPaddingInlineStart);
+    const selectedTab = active.getBoundingClientRect();
+    const nearbyTab = selected === today ? active.nextElementSibling
+      : selected === defaultDate ? strip.querySelector('[aria-current="date"]') : null;
+    const nearby = nearbyTab?.getBoundingClientRect() ?? selectedTab;
+    const centered = selectedTab.left - origin - (viewportWidth - selectedTab.width) / 2;
+    const positions = Array.from(strip.querySelectorAll('[role="tab"]'), tab =>
+      Math.min(maxScroll, Math.max(0, tab.getBoundingClientRect().left - origin - inset)),
+    );
+    positions.sort((a, b) => Math.abs(a - centered) - Math.abs(b - centered));
+
+    const fits = (position: number, left: number, right: number) =>
+      position <= left - origin + 1 && position + viewportWidth >= right - origin - 1;
+    // Prefer a snap point that shows both relevant dates, then one that shows the selection.
+    strip.scrollLeft = positions.find(position =>
+      fits(position, Math.min(selectedTab.left, nearby.left), Math.max(selectedTab.right, nearby.right)),
+    ) ?? positions.find(position => fits(position, selectedTab.left, selectedTab.right)) ?? positions[0];
+  }, [selected, dates, language, initialReady, defaultDate, today]);
 
   function navigate(date: string) {
     setDates(current => {
@@ -104,26 +117,28 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
   return (
     <Tabs value={selected} onValueChange={navigate} activationMode="manual" className="space-y-4">
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <Button type="button" variant="outline" size="icon" aria-label={copy.earlier} className="h-9 w-8 shrink-0 rounded-xl bg-card"
+        <Button type="button" variant="outline" size="icon" aria-label={copy.earlier} className="h-9 w-8 shrink-0 bg-card"
           onClick={() => navigate(shiftDay(selected, -1))}><ChevronLeft size={17} aria-hidden="true" /></Button>
-        <TabsList ref={list} aria-label={copy.dates} className="h-auto min-w-0 bg-card ring-1 ring-inset ring-border">
-          {dates.map(date => {
-            const available = menuState(date, today, results[date]) === "menu";
-            return (
-              <TabsTrigger key={date} value={date} aria-current={date === today ? "date" : undefined}
-                className="relative h-7 flex-1 gap-1.5 whitespace-nowrap px-2 py-0 text-xs aria-[current=date]:font-bold aria-[current=date]:text-foreground focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] sm:px-3">
-                <span>{dateTabLabel(date, language, today, tomorrow)}</span>
-                {available && <><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-400" /><span className="sr-only">{copy.available}</span></>}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-        <Button type="button" variant="outline" size="icon" aria-label={copy.later} className="h-9 w-8 shrink-0 rounded-xl bg-card"
+        <div className="menu-date-strip relative flex min-w-0 flex-1 overflow-hidden rounded-[10px] border bg-card">
+          <TabsList ref={list} aria-label={copy.dates} className="h-auto bg-card">
+            {dates.map(date => {
+              const available = menuState(date, today, results[date]) === "menu";
+              return (
+                <TabsTrigger key={date} value={date} aria-current={date === today ? "date" : undefined}
+                  className="relative h-7 flex-1 gap-1.5 px-2 py-0 text-xs aria-[current=date]:font-bold focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] data-[state=inactive]:aria-[current=date]:text-foreground sm:px-1.5">
+                  <span>{dateTabLabel(date, language, today, tomorrow)}</span>
+                  {available && <><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--menu-available))]" /><span className="sr-only">{copy.available}</span></>}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
+        <Button type="button" variant="outline" size="icon" aria-label={copy.later} className="h-9 w-8 shrink-0 bg-card"
           onClick={() => navigate(shiftDay(selected, 1))}><ChevronRight size={17} aria-hidden="true" /></Button>
       </div>
 
       {closedToday && selected !== today && (
-        <aside className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-[hsl(var(--menu-accent))] px-4 py-3 text-sm text-[hsl(var(--menu-accent-foreground))]">
+        <aside className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-muted px-4 py-3 text-sm text-secondary-foreground">
           <span className="font-semibold">{copy.closed} <span aria-hidden="true">·</span></span>
           <button type="button" onClick={() => navigate(upcomingBusinessDay)}
             className="rounded-sm text-left underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

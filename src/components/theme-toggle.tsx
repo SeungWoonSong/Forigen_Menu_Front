@@ -28,8 +28,8 @@ export function ThemeToggle({ label }: { label: string }) {
       className="h-9 w-8"
       onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
     >
-      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <Sun className="h-4 w-4 dark:hidden" aria-hidden="true" />
+      <Moon className="hidden h-4 w-4 dark:block" aria-hidden="true" />
       <span className="sr-only">{label}</span>
     </Button>
   )

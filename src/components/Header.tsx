@@ -18,20 +18,20 @@ export function Header({ language, onLanguageChange, onTodayClick }: HeaderProps
   const copy = menuCopy[language];
 
   return (
-    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b bg-background">
       <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-2 px-4 sm:px-6">
         <button
           type="button"
           onClick={onTodayClick}
           aria-label={`Gasan Menu · ${copy.today}`}
-          className="flex items-center gap-1.5 rounded-lg text-sm font-bold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5 sm:text-lg"
+          className="flex items-center gap-1.5 rounded-lg text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-2.5 sm:text-lg"
         >
           <Image src={PENGUIN.mascot} alt="" width={38} height={38} className="max-[359px]:w-8" priority />
           Gasan Menu
         </button>
 
         <div className="flex items-center gap-1 sm:gap-3">
-          <div role="group" aria-label={copy.languages} className="flex items-center rounded-xl border bg-card p-0.5">
+          <div role="group" aria-label={copy.languages} className="flex items-center rounded-[10px] border bg-card p-0.5">
             {(Object.keys(LANGUAGES) as Language[]).map(code => (
               <button
                 key={code}
