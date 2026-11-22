@@ -95,10 +95,13 @@ export function menuState(date: string, today: string, result?: MenuRequest) {
 export function pickDefaultDate(dates: string[], today: string, results: MenuRequests) {
   const state = menuState(today, today, results[today]);
   if (state === "menu" || state === "error" || state === "loading") return today;
+  const latestMenu = [...dates].reverse().find(date => date < today && menuState(date, today, results[date]) === "menu");
+  if (state === "closed") {
+    const next = nextBusinessDay(today);
+    return menuState(next, today, results[next]) === "unpublished" ? latestMenu ?? next : next;
+  }
   const upcoming = dates.find(date => date > today && menuState(date, today, results[date]) === "menu");
-  if (upcoming) return upcoming;
-  if (state === "closed") return nextBusinessDay(today);
-  return [...dates].reverse().find(date => date < today && menuState(date, today, results[date]) === "menu") ?? today;
+  return upcoming ?? latestMenu ?? today;
 }
 
 export function cornerLabel(corner: string, language: Language) {

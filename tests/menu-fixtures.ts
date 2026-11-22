@@ -40,3 +40,34 @@ export function richMenu(date: string, language: Language = "en"): DayMenu {
     updated_at: "2026-11-23T03:07:00Z",
   };
 }
+
+export const malformedMenu = {
+  language: "ko",
+  updated_at: ["2026-11-23T03:07:00Z"],
+  lunch: [{
+    ...mainDish,
+    description: null,
+    original_name: 7,
+    info: {
+      summary: "A valid summary alongside invalid metadata.",
+      detail: { text: "Wrong type" },
+      similar_to: false,
+      spice: 2.5,
+      contains: ["soy", 42, "not-an-ingredient"],
+      may_contain: "egg",
+      vegetarian: "false",
+      vegan: true,
+    },
+    sub_items: [
+      null,
+      { name: 31 },
+      { name: "Seasoned tofu", summary: "A valid side note.", original_name: 12, spice: "3", contains: ["soy", null], vegan: [] },
+    ],
+  }, {
+    name: "Legacy lunch",
+    sub_menus: ["Rice", 42, "Kimchi"],
+    sub_items: { name: "Invalid list" },
+    info: ["Invalid object"],
+  }],
+  dinner: [],
+};

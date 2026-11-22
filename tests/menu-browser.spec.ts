@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { dateLabel, LANGUAGES } from "../src/lib/menu";
 import { menuCopy } from "../src/lib/menu-copy";
 import type { Language } from "../src/types/menu";
-import { emptyMenu, mainDish, richMenu } from "./menu-fixtures";
+import { emptyMenu, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
 
 const monday = "20261123";
 const tuesday = "20261124";
@@ -42,6 +42,28 @@ async function screenshot(page: Page, name: string, info: TestInfo) {
 async function expectPenguin(image: Locator, filename: string) {
   await expect(image).toHaveAttribute("src", new RegExp(`${filename}\\.png`));
   await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+}
+
+async function expectErrorArtwork(image: Locator) {
+  await expectPenguin(image, "error");
+  // The optimized image URL can stay the same after an asset replacement.
+  const difference = await image.evaluate(async element => {
+    const original = new Image();
+    original.src = "/penguin/error.png";
+    await original.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 48;
+    const context = canvas.getContext("2d")!;
+    const pixels = (source: HTMLImageElement) => {
+      context.clearRect(0, 0, 48, 48);
+      context.drawImage(source, 0, 0, 48, 48);
+      return context.getImageData(0, 0, 48, 48).data;
+    };
+    const expected = pixels(original);
+    const rendered = pixels(element as HTMLImageElement);
+    return rendered.reduce((sum, value, index) => sum + Math.abs(value - expected[index]), 0) / rendered.length;
+  });
+  expect(difference).toBeLessThan(5);
 }
 
 function tab(page: Page, date: string, language: Language = "en") {
@@ -111,19 +133,42 @@ for (const size of Object.keys(sizes) as Size[]) {
   });
 }
 
-test("@live Sunday opens the next menu and has a separate closed day panel", async ({ browser }, info) => {
-  const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T01:00:00Z" });
+test("@live Sunday evening opens Monday with lunch first and has a separate closed day panel", async ({ browser }, info) => {
+  const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
   try {
     await page.goto("/");
     await expect(page.getByRole("complementary").filter({ hasText: menuCopy.en.closed })).toBeVisible();
     await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("heading", { name: dateLabel(monday, "en") })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
     await screenshot(page, "11-22-weekend-first-view-mobile", info);
     await tab(page, sunday).click();
     await expect(page.getByRole("heading", { name: menuCopy.en.closed })).toBeVisible();
     await screenshot(page, "11-22-closed-mobile", info);
     await page.getByRole("button", { name: /Next business day/ }).click();
     await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
+  } finally {
+    await context.close();
+  }
+});
+
+test("opens Friday on a Sunday with an unpublished Monday and links to Monday", async ({ browser }, info) => {
+  const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
+  try {
+    await page.route(menuRoute, route => {
+      const date = new URL(route.request().url()).pathname.split("/").pop()!;
+      return route.fulfill({ json: date === "20261120" || date === tuesday ? richMenu(date) : emptyMenu(date) });
+    });
+    await page.goto("/");
+    const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
+    const nextDay = banner.getByRole("button", { name: menuCopy.en.nextBusiness(dateLabel(monday, "en")) });
+    await expect(nextDay).toBeVisible();
+    await expect(tab(page, "20261120")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
+    await screenshot(page, "weekend-unpublished-fallback-mobile", info);
+    await nextDay.click();
+    await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -163,7 +208,7 @@ for (const size of Object.keys(sizes) as Size[]) {
       release();
       const alert = page.getByRole("tabpanel").getByRole("alert");
       await expect(alert).toContainText(menuCopy.en.error);
-      await expectPenguin(alert.locator("img"), "error");
+      await expectErrorArtwork(alert.locator("img"));
       await screenshot(page, `server-error-${size}`, info);
       await page.getByRole("button", { name: menuCopy.en.retry }).click();
       await expect(page.getByRole("heading", { name: mainDish.name })).toBeVisible();
@@ -186,6 +231,26 @@ test("network and malformed-success responses remain retryable errors", async ({
       await page.getByRole("button", { name: menuCopy.en.retry }).click();
     }
     await expect(page.getByRole("heading", { name: mainDish.name })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test("renders usable dishes when optional API fields are malformed", async ({ browser }) => {
+  const { page, context } = await setup(browser, "mobile");
+  const errors: Error[] = [];
+  try {
+    page.on("pageerror", error => errors.push(error));
+    await fixtureMenu(page);
+    await page.route(mondayRoute, route => route.fulfill({ json: malformedMenu }));
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Legacy lunch" })).toBeVisible();
+    await expect(page.getByText("A valid summary alongside invalid metadata.")).toBeVisible();
+    await expect(page.getByRole("article").getByText("Kimchi", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Seasoned tofu" }).tap();
+    await expect(page.getByRole("dialog")).toContainText("A valid side note.");
+    await expect(page.getByRole("dialog")).toContainText("Contains · Soy");
+    expect(errors).toEqual([]);
   } finally {
     await context.close();
   }
@@ -279,7 +344,9 @@ test("shows both penguin illustrations for hot menu tips on mobile", async ({ br
     const withServingTip = page.locator("article").filter({ has: page.getByRole("heading", { name: "Hot noodles with a serving tip" }) });
     await expect(withServingTip.locator("aside")).toContainText(menuCopy.en.spice[3]);
     const withoutTips = page.locator("article").filter({ has: page.getByRole("heading", { name: "Hot noodles without tips" }) });
-    await expect(withoutTips.locator("aside")).toHaveCount(0);
+    await expect(withoutTips.locator("aside")).toContainText(menuCopy.en.spice[3]);
+    await withoutTips.scrollIntoViewIfNeeded();
+    await expectPenguin(withoutTips.locator("aside img"), "spicy");
   } finally {
     await context.close();
   }
@@ -289,6 +356,7 @@ test("shows dinner first in the afternoon and opens the desktop tooltip on hover
   const { page, context } = await setup(browser, "desktop", { now: "2026-11-23T05:00:00Z" });
   try {
     await fixtureMenu(page);
+    await page.route(`**/api/menu/${tuesday}?lang=*`, route => route.fulfill({ json: richMenu(tuesday) }));
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.dinner);
     await expect(page.getByText(mainDish.description, { exact: true })).toBeVisible();
@@ -302,6 +370,8 @@ test("shows dinner first in the afternoon and opens the desktop tooltip on hover
     await page.mouse.move(0, 0);
     await chip.focus();
     await expect(page.getByRole("tooltip")).toBeAttached();
+    await tab(page, tuesday).click();
+    await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
   } finally {
     await context.close();
   }

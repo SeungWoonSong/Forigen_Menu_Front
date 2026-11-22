@@ -19,13 +19,13 @@ export interface DateTabsRef {
 interface DateTabsProps {
   language: Language;
   today: string;
-  dinnerFirst: boolean;
+  afterLunch: boolean;
 }
 
 const noResults: MenuRequests = {};
 
 export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs(
-  { language, today, dinnerFirst }, ref,
+  { language, today, afterLunch }, ref,
 ) {
   const [initialDates] = useState(() => initialMenuDates(today));
   const [dates, setDates] = useState(initialDates);
@@ -36,11 +36,12 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
   const results = requests[language] ?? noResults;
   const copy = menuCopy[language];
   const closedToday = isClosedDay(today);
+  const upcomingBusinessDay = nextBusinessDay(today);
   const tomorrow = shiftDay(today, 1);
   const initialReady = initialDates.every(date => isClosedDay(date) || results[date]);
   const defaultDate = initialReady
     ? pickDefaultDate(initialDates, today, results)
-    : closedToday ? nextBusinessDay(today) : today;
+    : closedToday ? upcomingBusinessDay : today;
   const selected = selection ?? defaultDate;
 
   useEffect(() => {
@@ -123,9 +124,9 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
       {closedToday && selected !== today && (
         <aside className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-[hsl(var(--menu-accent))] px-4 py-3 text-sm text-[hsl(var(--menu-accent-foreground))]">
           <span className="font-semibold">{copy.closed} <span aria-hidden="true">·</span></span>
-          <button type="button" onClick={() => navigate(defaultDate)}
+          <button type="button" onClick={() => navigate(upcomingBusinessDay)}
             className="rounded-sm text-left underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            {businessLabel(defaultDate)}
+            {businessLabel(upcomingBusinessDay)}
           </button>
         </aside>
       )}
@@ -133,13 +134,13 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
       {dates.map(date => {
         const result = results[date];
         const state = !selection && !initialReady ? "loading" : menuState(date, today, result);
-        const businessDate = date === today && closedToday ? defaultDate : nextBusinessDay(date);
+        const businessDate = nextBusinessDay(date);
         const action = state === "closed" ? { label: businessLabel(businessDate), onClick: () => navigate(businessDate) } :
           state === "error" ? { label: copy.retry, onClick: () => retry(date) } : undefined;
         return (
           <TabsContent key={date} value={date} className="mt-0">
             {state === "menu" && result?.status === "ready"
-              ? <MenuCard menu={result.menu} language={language} dinnerFirst={dinnerFirst} />
+              ? <MenuCard menu={result.menu} language={language} dinnerFirst={date === today && afterLunch} />
               : <MenuStatus state={state === "menu" ? "loading" : state} language={language} closedToday={date === today} action={action} />}
           </TabsContent>
         );

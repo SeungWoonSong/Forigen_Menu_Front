@@ -45,7 +45,7 @@ function DishCard({ item, language, meal }: { item: MenuItem; language: Language
         {detail && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground sm:text-base">{detail}</p>}
       </div>
       <DietaryTags info={info} language={language} />
-      {(info?.similar_to || info?.how_to_eat) && (
+      {(info?.similar_to || info?.how_to_eat || info?.spice === 3) && (
         <aside className="space-y-2">
           {info.similar_to
             ? <PenguinTip image={info.spice === 3 ? PENGUIN.spicy : PENGUIN.mascot} label={copy.similar} text={info.similar_to} />

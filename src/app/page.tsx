@@ -89,7 +89,7 @@ export default function Home() {
           </aside>
         )}
         {today && now
-          ? <DateTabs key={today} ref={dateTabsRef} language={language} today={today} dinnerFirst={timeInKorea(now) >= "14:00"} />
+          ? <DateTabs key={today} ref={dateTabsRef} language={language} today={today} afterLunch={timeInKorea(now) >= "14:00"} />
           : <MenuStatus state="loading" language={language} />}
       </main>
 
