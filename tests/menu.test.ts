@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  cornerLabel, dateInKorea, extraMenuChips, initialMenuDates, isClosedDay, isStaple,
+  cornerLabel, dateInKorea, extraMenuChips, extraMenuMeal, initialMenuDates, isClosedDay, isStaple,
   menuState, nextBusinessDay, pickDefaultDate, selectLanguage, sideItems, timeInKorea,
 } from "../src/lib/menu";
 import type { MenuRequest } from "../src/lib/menu";
@@ -123,6 +123,18 @@ test("includes the self-service main name once and removes the salad title from 
   const item = { ...mainDish, name: "Brown Rice", sub_menus: ["Cabbage", "Brown Rice ", "Cabbage", ""] };
   assert.deepEqual(extraMenuChips(item, "selfService"), ["Brown Rice", "Cabbage"]);
   assert.deepEqual(extraMenuChips(item, "salad"), ["Cabbage"]);
+});
+
+test("uses each extra menu's meal type, with lunch as the cafeteria default", () => {
+  const mealTypes = {
+    lunch: ["중식", "lunch", " Lunch ", "", "  ", "unknown"],
+    dinner: ["석식", "dinner", " Dinner "],
+  } as const;
+  for (const [expected, values] of Object.entries(mealTypes)) {
+    for (const meal_type of values) {
+      assert.equal(extraMenuMeal({ ...mainDish, meal_type }), expected, JSON.stringify(meal_type));
+    }
+  }
 });
 
 test("uses rich side items with a legacy fallback and only recognizes original Korean staple names", () => {

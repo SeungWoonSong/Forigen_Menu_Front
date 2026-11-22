@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { Moon, Salad, Soup, Sun } from "lucide-react";
+import { useId } from "react";
 import type { DayMenu, Language, MenuItem } from "../types/menu";
-import { cornerLabel, dateLabel, extraMenuChips, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
+import { cornerLabel, dateLabel, extraMenuChips, extraMenuMeal, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import { cn } from "../lib/utils";
 import { DietaryTags } from "./DietaryTags";
@@ -63,11 +64,11 @@ function ExtraMenu({ item, kind, language }: { item: MenuItem; kind: "selfServic
   const chips = extraMenuChips(item, kind);
   return (
     <section className="space-y-2 rounded-2xl border bg-card p-4 sm:p-5">
-      <h3 className="flex items-center gap-2 text-sm font-semibold">
+      <h4 className="flex items-center gap-2 text-sm font-semibold">
         <Icon size={17} aria-hidden="true" className="text-emerald-700 dark:text-emerald-300" />
         {menuCopy[language][kind]}
-      </h3>
-      {kind === "salad" && <h4 className="text-base font-semibold">{item.name}</h4>}
+      </h4>
+      {kind === "salad" && <h5 className="text-base font-semibold">{item.name}</h5>}
       {chips.length > 0 && <ul className="flex flex-wrap gap-1.5">
         {chips.map(name => <li key={name} className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs">{name}</li>)}
       </ul>}
@@ -76,6 +77,7 @@ function ExtraMenu({ item, kind, language }: { item: MenuItem; kind: "selfServic
 }
 
 export function MenuCard({ menu, language, dinnerFirst }: { menu: DayMenu; language: Language; dinnerFirst: boolean }) {
+  const headingId = useId();
   const copy = menuCopy[language];
   const order = dinnerFirst ? (["dinner", "lunch"] as const) : (["lunch", "dinner"] as const);
   const updatedAt = menu.updated_at ? new Date(menu.updated_at) : undefined;
@@ -90,20 +92,18 @@ export function MenuCard({ menu, language, dinnerFirst }: { menu: DayMenu; langu
       {order.map(meal => {
         const Icon = meal === "lunch" ? Sun : Moon;
         return (
-          <section key={meal} className="space-y-2.5">
-            <h3 className="flex items-center gap-2.5 text-lg font-semibold">
+          <section key={meal} aria-labelledby={`${headingId}-${meal}`} className="space-y-2.5">
+            <h3 id={`${headingId}-${meal}`} className="flex items-center gap-2.5 text-lg font-semibold">
               <span className={cn("rounded-lg p-1.5", mealStyles[meal])}><Icon size={18} aria-hidden="true" /></span>
               {copy[meal]}
             </h3>
             {menu[meal].length ? menu[meal].map(item => <DishCard key={item.id} item={item} language={language} meal={meal} />) :
               <p className="px-1 text-sm text-muted-foreground">{copy.noMeal}</p>}
+            {menu.salad && extraMenuMeal(menu.salad) === meal && <ExtraMenu item={menu.salad} kind="salad" language={language} />}
+            {menu.dessert && extraMenuMeal(menu.dessert) === meal && <ExtraMenu item={menu.dessert} kind="selfService" language={language} />}
           </section>
         );
       })}
-      {(menu.dessert || menu.salad) && <div className="space-y-2.5">
-        {menu.dessert && <ExtraMenu item={menu.dessert} kind="selfService" language={language} />}
-        {menu.salad && <ExtraMenu item={menu.salad} kind="salad" language={language} />}
-      </div>}
     </div>
   );
 }

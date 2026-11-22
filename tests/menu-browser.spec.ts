@@ -10,20 +10,24 @@ import { emptyMenu, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
 const monday = "20261123";
 const tuesday = "20261124";
 const sunday = "20261122";
+const wednesday = "20261125";
 const morning = "2026-11-23T01:00:00Z";
 const sizes = { mobile: { width: 390, height: 844 }, desktop: { width: 1280, height: 900 } };
 type Size = keyof typeof sizes;
+const languages = Object.keys(LANGUAGES) as Language[];
+const themes = ["light", "dark"] as const;
 
 async function setup(
   browser: Browser, size: Size,
-  { now = morning, language = "en", saved = true, dark = false }: {
-    now?: string; language?: Language; saved?: boolean; dark?: boolean;
+  { now = morning, language = "en", saved = true, dark = false, width = sizes[size].width }: {
+    now?: string; language?: Language; saved?: boolean; dark?: boolean; width?: number;
   } = {},
 ) {
   const context = await browser.newContext({
-    viewport: sizes[size], locale: language, timezoneId: "America/Los_Angeles",
+    viewport: { ...sizes[size], width }, locale: language, timezoneId: "America/Los_Angeles",
     colorScheme: dark ? "dark" : "light", reducedMotion: "reduce",
     isMobile: size === "mobile", hasTouch: size === "mobile",
+    deviceScaleFactor: size === "mobile" ? 3 : 1,
   });
   const page = await context.newPage();
   if (saved) await page.addInitScript(lang => localStorage.setItem("gasan-menu-language", lang), language);
@@ -31,11 +35,11 @@ async function setup(
   return { page, context };
 }
 
-async function screenshot(page: Page, name: string, info: TestInfo) {
+async function screenshot(page: Page, name: string, info: TestInfo, fullPage = false) {
   const directory = process.env.MENU_SCREENSHOTS_DIR;
   if (directory) await mkdir(directory, { recursive: true });
   const path = directory ? join(directory, `${name}.png`) : info.outputPath(`${name}.png`);
-  await page.screenshot({ path, animations: "disabled" });
+  await page.screenshot({ path, animations: "disabled", fullPage });
   await info.attach(name, { path, contentType: "image/png" });
 }
 
@@ -67,7 +71,18 @@ async function expectErrorArtwork(image: Locator) {
 }
 
 function tab(page: Page, date: string, language: Language = "en") {
-  return page.getByRole("tab", { name: new RegExp(dateLabel(date, language, true).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+  const numeric = dateLabel(date, language, true).split(" ")[0];
+  return page.getByRole("tab", { name: new RegExp(`\\b${numeric}\\b`) });
+}
+
+async function expectViewportWidth(page: Page, width: number) {
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+    innerWidth: window.innerWidth,
+  }));
+  expect(dimensions).toEqual({ scrollWidth: width, clientWidth: width, innerWidth: width });
+  return dimensions;
 }
 
 const menuRoute = "**/api/menu/*?lang=*";
@@ -82,33 +97,97 @@ async function fixtureMenu(page: Page) {
   });
 }
 
-for (const size of Object.keys(sizes) as Size[]) {
-  for (const language of Object.keys(LANGUAGES) as Language[]) {
-    test(`@live ${language} Monday menu on ${size}`, async ({ browser }, info) => {
-      const { page, context } = await setup(browser, size, { language });
-      try {
-        await page.goto("/");
-        await expect(page.getByRole("heading", { name: dateLabel(monday, language) })).toBeVisible();
-        await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
-        await expect(tab(page, monday, language)).toContainText(menuCopy[language].today);
-        await expect(tab(page, monday, language)).toContainText(menuCopy[language].available);
-        await expect(tab(page, tuesday, language)).toContainText(menuCopy[language].tomorrow);
-        await expect(page.getByRole("button", { name: LANGUAGES[language].name })).toHaveAttribute("aria-pressed", "true");
-        await expect(page.getByRole("heading", { name: menuCopy[language].lunch, exact: true })).toBeVisible();
-        await expect(page.locator("html")).toHaveAttribute("lang", language);
-        const corner = { ko: "코너1", en: "Corner 1", zh: "1号窗口", sv: "Disk 1" }[language];
-        await expect(page.getByText(corner, { exact: true }).first()).toBeVisible();
-        for (const list of await page.locator("article ul").all()) {
-          expect(await list.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
-            await list.evaluate(element => element.clientWidth),
-          );
+const expectedTabLabels = {
+  ko: ["오늘 11/23", "내일 11/24", "11/25 (수)"],
+  en: ["Today 11/23", "Tomorrow 11/24", "11/25 Wed"],
+  zh: ["今天 11/23", "明天 11/24", "11/25 周三"],
+  sv: ["I dag 23/11", "I morgon 24/11", "25/11 ons"],
+};
+
+for (const width of [390, 375, 430]) {
+  for (const language of languages) {
+    for (const theme of themes) {
+      test(`date strip fits ${width}px in ${language} and ${theme} mode`, async ({ browser }) => {
+        const { page, context } = await setup(browser, "mobile", { width, language, dark: theme === "dark" });
+        try {
+          await page.route(menuRoute, route => {
+            const date = new URL(route.request().url()).pathname.split("/").pop()!;
+            return route.fulfill({ json: richMenu(date, language) });
+          });
+          await page.goto("/");
+          const [today, tomorrow, later] = [monday, tuesday, wednesday].map(date => tab(page, date, language));
+          for (const [index, button] of [today, tomorrow, later].entries()) {
+            await expect(button).toHaveAccessibleName(`${expectedTabLabels[language][index]} ${menuCopy[language].available}`);
+          }
+          const dateStrip = page.getByRole("tablist");
+          expect(await dateStrip.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
+          for (const button of await dateStrip.getByRole("tab").all()) {
+            const layout = await button.evaluate(element => {
+              const range = document.createRange();
+              range.selectNodeContents(element.firstElementChild!);
+              return { lines: range.getClientRects().length, height: element.getBoundingClientRect().height };
+            });
+            expect(layout).toEqual({ lines: 1, height: 28 });
+          }
+          await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
+          await expectViewportWidth(page, width);
+          await tomorrow.tap();
+          await expect(tomorrow).toHaveAttribute("aria-selected", "true");
+          await expect(today).toHaveAttribute("aria-selected", "false");
+          await expect(today).toHaveAttribute("aria-current", "date");
+          await expect(today).toHaveCSS("font-weight", "700");
+          await expectViewportWidth(page, width);
+        } finally {
+          await context.close();
         }
-        await screenshot(page, `11-23-${language}-${size}`, info);
-      } finally {
-        await context.close();
-      }
-    });
+      });
+    }
   }
+}
+
+const liveLayouts = [
+  ...languages.flatMap(language => themes.map(theme => ({ size: "mobile" as const, language, theme }))),
+  ...languages.map(language => ({ size: "desktop" as const, language, theme: "light" as const })),
+];
+
+for (const { size, language, theme } of liveLayouts) {
+  test(`@live ${language} Monday menu on ${size} in ${theme} mode`, async ({ browser }, info) => {
+    const { page, context } = await setup(browser, size, { language, dark: theme === "dark" });
+    try {
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: dateLabel(monday, language) })).toBeVisible();
+      await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
+      await expect(tab(page, monday, language)).toContainText(menuCopy[language].today);
+      await expect(tab(page, monday, language)).toContainText(menuCopy[language].available);
+      await expect(tab(page, tuesday, language)).toContainText(menuCopy[language].tomorrow);
+      await expect(page.getByRole("button", { name: LANGUAGES[language].name })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("heading", { name: menuCopy[language].lunch, exact: true })).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("lang", language);
+      const corner = { ko: "코너1", en: "Corner 1", zh: "1号窗口", sv: "Disk 1" }[language];
+      await expect(page.getByText(corner, { exact: true }).first()).toBeVisible();
+      for (const list of await page.locator("article ul").all()) {
+        expect(await list.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
+          await list.evaluate(element => element.clientWidth),
+        );
+      }
+      const copy = menuCopy[language];
+      const lunch = page.getByRole("region", { name: copy.lunch, exact: true });
+      const dinner = page.getByRole("region", { name: copy.dinner, exact: true });
+      await expect(lunch.getByRole("heading", { level: 4 })).toHaveText([
+        ...(await lunch.locator("article h4").allTextContents()), copy.salad, copy.selfService,
+      ]);
+      await expect(dinner.locator("article")).toHaveCount(1);
+      await expect(dinner.getByRole("heading", { name: copy.salad })).toHaveCount(0);
+      await expect(dinner.getByRole("heading", { name: copy.selfService })).toHaveCount(0);
+      await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
+      const dimensions = await expectViewportWidth(page, sizes[size].width);
+      const name = `11-23-${language}-${size}-${theme}`;
+      console.log(name, JSON.stringify(dimensions));
+      await screenshot(page, name, info, true);
+    } finally {
+      await context.close();
+    }
+  });
 }
 
 for (const size of Object.keys(sizes) as Size[]) {
@@ -118,11 +197,12 @@ for (const size of Object.keys(sizes) as Size[]) {
       await page.goto("/");
       await expect(tab(page, tuesday)).toContainText(menuCopy.en.available);
       await tab(page, tuesday).click();
-      const bar = page.locator("section").filter({ has: page.getByRole("heading", { name: "Self-service bar" }) });
+      const lunch = page.getByRole("region", { name: menuCopy.en.lunch, exact: true });
+      const bar = lunch.locator("section").filter({ has: page.getByRole("heading", { name: "Self-service bar" }) });
       await expect(bar.getByRole("listitem").filter({ hasText: /^Brown Rice$/ })).toHaveCount(1);
       await expect(bar.getByRole("heading")).toHaveCount(1);
-      const salad = page.locator("section").filter({ has: page.getByRole("heading", { name: "Salad & take-out" }) });
-      const saladName = await salad.getByRole("heading", { level: 4 }).innerText();
+      const salad = lunch.locator("section").filter({ has: page.getByRole("heading", { name: "Salad & take-out" }) });
+      const saladName = await salad.getByRole("heading", { level: 5 }).innerText();
       await expect(salad.getByRole("listitem").filter({ hasText: saladName })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: dateLabel(tuesday, "en") })).toBeVisible();
       await bar.scrollIntoViewIfNeeded();
@@ -303,6 +383,7 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
     const sheet = page.getByRole("dialog", { name: "Seasoned bean sprouts" });
     await chip.tap();
     await expect(sheet).toBeVisible();
+    await expectViewportWidth(page, sizes.mobile.width);
     for (const detail of ["숙주나물", "Tender bean sprouts seasoned with sesame oil.", "Mild", "Vegan", "Contains · Soy", "May contain · Peanuts", "estimated", menuCopy.en.allergy]) {
       await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
     }
@@ -355,15 +436,27 @@ test("shows both penguin illustrations for hot menu tips on mobile", async ({ br
 test("shows dinner first in the afternoon and opens the desktop tooltip on hover and focus", async ({ browser }, info) => {
   const { page, context } = await setup(browser, "desktop", { now: "2026-11-23T05:00:00Z" });
   try {
-    await fixtureMenu(page);
+    await page.route(menuRoute, route => {
+      const date = new URL(route.request().url()).pathname.split("/").pop()!;
+      return route.fulfill({ json: {
+        ...richMenu(date),
+        salad: { ...mainDish, name: "Lunch salad", meal_type: "중식" },
+        dessert: { ...mainDish, name: "Lunch self-service", meal_type: "" },
+      } });
+    });
     await page.route(`**/api/menu/${tuesday}?lang=*`, route => route.fulfill({ json: richMenu(tuesday) }));
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.dinner);
+    const lunch = page.getByRole("region", { name: menuCopy.en.lunch, exact: true });
+    const dinner = page.getByRole("region", { name: menuCopy.en.dinner, exact: true });
+    await expect(lunch.getByRole("heading", { level: 4 })).toHaveText([mainDish.name, menuCopy.en.salad, menuCopy.en.selfService]);
+    await expect(dinner.getByRole("heading", { level: 4 })).toHaveText(["Evening noodles"]);
     await expect(page.getByText(mainDish.description, { exact: true })).toBeVisible();
     const chip = page.getByRole("button", { name: "Seasoned bean sprouts" });
     await chip.hover();
     await expect(page.getByRole("tooltip")).toBeAttached();
     await expect(page.getByText(menuCopy.en.allergy, { exact: true })).toBeVisible();
+    await expectViewportWidth(page, sizes.desktop.width);
     await screenshot(page, "rich-side-tooltip-desktop", info);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("tooltip")).toHaveCount(0);
@@ -372,6 +465,27 @@ test("shows dinner first in the afternoon and opens the desktop tooltip on hover
     await expect(page.getByRole("tooltip")).toBeAttached();
     await tab(page, tuesday).click();
     await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
+  } finally {
+    await context.close();
+  }
+});
+
+test("places an extra in dinner only when its own meal type identifies dinner", async ({ browser }) => {
+  const { page, context } = await setup(browser, "mobile");
+  try {
+    await page.route(menuRoute, route => {
+      const date = new URL(route.request().url()).pathname.split("/").pop()!;
+      return route.fulfill({ json: {
+        ...richMenu(date),
+        salad: { ...mainDish, name: "Evening salad", meal_type: "석식" },
+        dessert: { ...mainDish, name: "Lunch self-service", meal_type: "unknown" },
+      } });
+    });
+    await page.goto("/");
+    const lunch = page.getByRole("region", { name: menuCopy.en.lunch, exact: true });
+    const dinner = page.getByRole("region", { name: menuCopy.en.dinner, exact: true });
+    await expect(lunch.getByRole("heading", { level: 4 })).toHaveText([mainDish.name, menuCopy.en.selfService]);
+    await expect(dinner.getByRole("heading", { level: 4 })).toHaveText(["Evening noodles", menuCopy.en.salad]);
   } finally {
     await context.close();
   }

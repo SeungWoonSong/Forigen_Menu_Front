@@ -2,6 +2,7 @@ import { addDays, format, isWeekend, parse } from "date-fns";
 import { enUS, ko, sv, zhCN } from "date-fns/locale";
 import { formatInTimeZone } from "date-fns-tz";
 import type { DayMenu, Language, MenuItem, SideItem } from "../types/menu";
+import { menuCopy } from "./menu-copy";
 
 export const PENGUIN = {
   mascot: "/mascot.png",
@@ -48,6 +49,14 @@ const parseDay = (date: string) => parse(date, "yyyyMMdd", new Date(2000, 0, 1))
 
 export function dateLabel(date: string, language: Language, short = false) {
   return format(parseDay(date), (short ? shortDate : longDate)[language], { locale: locales[language] });
+}
+
+export function dateTabLabel(date: string, language: Language, today: string, tomorrow: string) {
+  const copy = menuCopy[language];
+  const relative = date === today ? copy.today : date === tomorrow ? copy.tomorrow : undefined;
+  if (!relative) return dateLabel(date, language, true);
+  const numericDate = format(parseDay(date), language === "sv" ? "d/M" : "M/d");
+  return `${relative} ${numericDate}`;
 }
 
 export function shiftDay(date: string, offset: number) {
@@ -126,4 +135,9 @@ export function extraMenuChips(item: MenuItem, kind: "selfService" | "salad") {
   const entries = kind === "selfService" ? [name, ...item.sub_menus] : item.sub_menus;
   return [...new Set(entries.map(entry => entry.trim()))]
     .filter(entry => entry && (kind !== "salad" || entry !== name));
+}
+
+export function extraMenuMeal(item: MenuItem) {
+  const meal = item.meal_type.trim().toLowerCase();
+  return meal === "석식" || meal === "dinner" ? "dinner" : "lunch";
 }
