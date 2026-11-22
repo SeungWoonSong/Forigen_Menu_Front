@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Browser, Page, TestInfo } from "@playwright/test";
+import type { Browser, Locator, Page, TestInfo } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { dateLabel, LANGUAGES } from "../src/lib/menu";
@@ -39,6 +39,11 @@ async function screenshot(page: Page, name: string, info: TestInfo) {
   await info.attach(name, { path, contentType: "image/png" });
 }
 
+async function expectPenguin(image: Locator, filename: string) {
+  await expect(image).toHaveAttribute("src", new RegExp(`${filename}\\.png`));
+  await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+}
+
 function tab(page: Page, date: string, language: Language = "en") {
   return page.getByRole("tab", { name: new RegExp(dateLabel(date, language, true).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
 }
@@ -71,6 +76,11 @@ for (const size of Object.keys(sizes) as Size[]) {
         await expect(page.locator("html")).toHaveAttribute("lang", language);
         const corner = { ko: "코너1", en: "Corner 1", zh: "1号窗口", sv: "Disk 1" }[language];
         await expect(page.getByText(corner, { exact: true }).first()).toBeVisible();
+        for (const list of await page.locator("article ul").all()) {
+          expect(await list.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
+            await list.evaluate(element => element.clientWidth),
+          );
+        }
         await screenshot(page, `11-23-${language}-${size}`, info);
       } finally {
         await context.close();
@@ -136,29 +146,33 @@ test("distinguishes a future weekday from a confirmed past empty menu", async ({
   }
 });
 
-test("shows loading, a server failure, and data after retry", async ({ browser }, info) => {
-  const { page, context } = await setup(browser, "mobile");
-  let release!: () => void;
-  const gate = new Promise<void>(resolve => { release = resolve; });
-  try {
-    await fixtureMenu(page);
-    await page.route(mondayRoute, async route => {
-      await gate;
-      await route.fulfill({ status: 500, headers: { "Cache-Control": "no-store" }, json: { error: "API unavailable" } });
-    }, { times: 1 });
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: menuCopy.en.loading })).toBeVisible();
-    await screenshot(page, "loading-mobile", info);
-    release();
-    await expect(page.getByRole("tabpanel").getByRole("alert")).toContainText(menuCopy.en.error);
-    await screenshot(page, "server-error-mobile", info);
-    await page.getByRole("button", { name: menuCopy.en.retry }).click();
-    await expect(page.getByRole("heading", { name: mainDish.name })).toBeVisible();
-  } finally {
-    release();
-    await context.close();
-  }
-});
+for (const size of Object.keys(sizes) as Size[]) {
+  test(`shows loading, a server failure, and data after retry on ${size}`, async ({ browser }, info) => {
+    const { page, context } = await setup(browser, size);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    try {
+      await fixtureMenu(page);
+      await page.route(mondayRoute, async route => {
+        await gate;
+        await route.fulfill({ status: 500, headers: { "Cache-Control": "no-store" }, json: { error: "API unavailable" } });
+      }, { times: 1 });
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: menuCopy.en.loading })).toBeVisible();
+      await screenshot(page, `loading-${size}`, info);
+      release();
+      const alert = page.getByRole("tabpanel").getByRole("alert");
+      await expect(alert).toContainText(menuCopy.en.error);
+      await expectPenguin(alert.locator("img"), "error");
+      await screenshot(page, `server-error-${size}`, info);
+      await page.getByRole("button", { name: menuCopy.en.retry }).click();
+      await expect(page.getByRole("heading", { name: mainDish.name })).toBeVisible();
+    } finally {
+      release();
+      await context.close();
+    }
+  });
+}
 
 test("network and malformed-success responses remain retryable errors", async ({ browser }) => {
   const { page, context } = await setup(browser, "desktop");
@@ -211,6 +225,8 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
     await expect(dish.getByText(mainDish.description, { exact: true })).toHaveCount(0);
     await expect(dish.getByText(mainDish.info!.similar_to!, { exact: true })).toBeVisible();
     await expect(dish.getByText(mainDish.info!.how_to_eat!, { exact: true })).toBeVisible();
+    await expectPenguin(dish.locator("aside img").first(), "mascot");
+    await expectPenguin(dish.locator("aside img").last(), "howtoeat");
     for (const tag of ["Not spicy", "Vegetarian", "Contains · Soy, Wheat", "May contain · Egg", "estimated"]) {
       await expect(dish.getByText(tag, { exact: true })).toBeVisible();
     }
@@ -232,6 +248,38 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
     await chip.tap();
     await page.touchscreen.tap(15, 100);
     await expect(sheet).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("shows both penguin illustrations for hot menu tips on mobile", async ({ browser }, info) => {
+  const { page, context } = await setup(browser, "mobile");
+  try {
+    await fixtureMenu(page);
+    const hotInfo = { ...mainDish.info!, spice: 3 as const };
+    await page.route(mondayRoute, route => route.fulfill({
+      json: {
+        ...richMenu(monday),
+        lunch: [{ ...mainDish, info: hotInfo }],
+        dinner: [
+          { ...mainDish, id: 2, name: "Hot noodles with a serving tip", info: { ...hotInfo, similar_to: undefined } },
+          { ...mainDish, id: 3, name: "Hot noodles without tips", info: { spice: 3 } },
+        ],
+      },
+    }));
+    await page.goto("/");
+    const lunch = page.locator("article").filter({ has: page.getByRole("heading", { name: mainDish.name }) });
+    await expect(lunch.getByText(menuCopy.en.spice[3], { exact: true })).toBeVisible();
+    await expect(lunch.getByText(hotInfo.how_to_eat!, { exact: true })).toBeVisible();
+    await expectPenguin(lunch.locator("aside img").first(), "spicy");
+    await expectPenguin(lunch.locator("aside img").last(), "howtoeat");
+    await screenshot(page, "hot-menu-penguin-tips-mobile", info);
+
+    const withServingTip = page.locator("article").filter({ has: page.getByRole("heading", { name: "Hot noodles with a serving tip" }) });
+    await expect(withServingTip.locator("aside")).toContainText(menuCopy.en.spice[3]);
+    const withoutTips = page.locator("article").filter({ has: page.getByRole("heading", { name: "Hot noodles without tips" }) });
+    await expect(withoutTips.locator("aside")).toHaveCount(0);
   } finally {
     await context.close();
   }
@@ -263,9 +311,22 @@ test("renders rich cards in dark mode", async ({ browser }, info) => {
   const { page, context } = await setup(browser, "mobile", { dark: true });
   try {
     await fixtureMenu(page);
+    const longSideName = "Supercalifragilisticexpialidocious".repeat(4);
+    await page.route(mondayRoute, route => route.fulfill({
+      json: {
+        ...richMenu(monday),
+        lunch: [{ ...mainDish, sub_items: [...mainDish.sub_items!, { name: longSideName, summary: "Seasoned vegetables." }] }],
+      },
+    }));
     await page.goto("/");
     await expect(page.locator("html")).toHaveClass(/dark/);
     await expect(page.getByRole("heading", { name: mainDish.name })).toBeVisible();
+    const longChip = page.getByRole("button", { name: longSideName });
+    await expect(longChip).toBeVisible();
+    expect(await longChip.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(30);
+    expect(await longChip.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
+      await longChip.evaluate(element => element.clientWidth),
+    );
     await screenshot(page, "rich-dark-mobile", info);
   } finally {
     await context.close();

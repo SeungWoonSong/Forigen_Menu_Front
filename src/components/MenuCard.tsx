@@ -12,6 +12,18 @@ const mealStyles = {
   dinner: "text-violet-800 bg-violet-100 dark:text-violet-200 dark:bg-violet-950",
 };
 
+function PenguinTip({ image, label, text }: { image: string; label: string; text?: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <Image src={image} alt="" width={40} height={40} className="shrink-0" />
+      <p className="menu-speech min-w-0 rounded-xl px-3 py-2 text-sm leading-relaxed">
+        <span className="font-semibold">{label}</span>
+        {text && <>{" · "}<span>{text}</span></>}
+      </p>
+    </div>
+  );
+}
+
 function DishCard({ item, language, meal }: { item: MenuItem; language: Language; meal: "lunch" | "dinner" }) {
   const copy = menuCopy[language];
   const { info } = item;
@@ -34,12 +46,11 @@ function DishCard({ item, language, meal }: { item: MenuItem; language: Language
       </div>
       <DietaryTags info={info} language={language} />
       {(info?.similar_to || info?.how_to_eat) && (
-        <aside className="flex items-start gap-2">
-          <Image src={PENGUIN.mascot} alt="" width={32} height={32} className="shrink-0" />
-          <dl className="menu-speech min-w-0 space-y-1.5 rounded-xl px-3 py-2 text-sm leading-relaxed">
-            {info.similar_to && <div><dt className="inline font-semibold">{copy.similar}</dt>{" · "}<dd className="inline">{info.similar_to}</dd></div>}
-            {info.how_to_eat && <div><dt className="inline font-semibold">{copy.howToEat}</dt>{" · "}<dd className="inline">{info.how_to_eat}</dd></div>}
-          </dl>
+        <aside className="space-y-2">
+          {info.similar_to
+            ? <PenguinTip image={info.spice === 3 ? PENGUIN.spicy : PENGUIN.mascot} label={copy.similar} text={info.similar_to} />
+            : info.spice === 3 && <PenguinTip image={PENGUIN.spicy} label={copy.spice[3]} />}
+          {info.how_to_eat && <PenguinTip image={PENGUIN.howtoeat} label={copy.howToEat} text={info.how_to_eat} />}
         </aside>
       )}
       <SideChips items={sideItems(item)} language={language} />

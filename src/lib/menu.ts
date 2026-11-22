@@ -11,6 +11,8 @@ export const PENGUIN = {
   unpublished: "/mascot.png",
   empty: "/NoMenu.png",
   error: "/penguin/error.png",
+  spicy: "/penguin/spicy.png",
+  howtoeat: "/penguin/howtoeat.png",
 } as const;
 
 export const LANGUAGES = {

@@ -80,12 +80,12 @@ export function SideChips({ items, language }: { items: SideItem[]; language: La
 
   return (
     <Tooltip.Provider delayDuration={180}>
-      <ul className="flex gap-1.5 overflow-x-auto pb-1">
+      <ul className="flex flex-wrap gap-1.5">
         {items.map((item, index) => {
-          const className = cn("inline-flex min-h-7 items-center whitespace-nowrap rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-medium",
+          const className = cn("inline-block min-h-7 max-w-full whitespace-normal rounded-full border bg-muted/50 px-2.5 py-1 text-left text-xs font-medium [overflow-wrap:anywhere]",
             isStaple(item.original_name) && "border-dashed bg-transparent text-muted-foreground");
           return (
-            <li key={`${item.name}-${index}`} className="shrink-0">
+            <li key={`${item.name}-${index}`} className="min-w-0 max-w-full">
               {item.summary ?
                 <SideDetails item={item} language={language} className={className} narrow={narrow} /> :
                 <span className={className}>{item.name}</span>}
