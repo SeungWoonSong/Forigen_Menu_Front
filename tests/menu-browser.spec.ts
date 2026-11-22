@@ -136,6 +136,8 @@ for (const width of [390, 375, 430]) {
           const tomorrowBox = (await tomorrow.boundingBox())!;
           expect(todayBox.x).toBeGreaterThanOrEqual(strip.x);
           expect(tomorrowBox.x + tomorrowBox.width).toBeLessThanOrEqual(strip.x + strip.width + 1);
+          await expect(today.locator("[data-date-label]")).toHaveCSS("opacity", "1");
+          await expect(tomorrow.locator("[data-date-label]")).toHaveCSS("opacity", "1");
           await tomorrow.tap();
           await expect(tomorrow).toHaveAttribute("aria-selected", "true");
           await expect(today).toHaveAttribute("aria-selected", "false");
@@ -149,6 +151,28 @@ for (const width of [390, 375, 430]) {
     }
   }
 }
+
+test("shows all seven date tabs without scrolling when they fit on desktop", async ({ browser }) => {
+  const { page, context } = await setup(browser, "desktop");
+  try {
+    await page.route(menuRoute, route => {
+      const date = new URL(route.request().url()).pathname.split("/").pop()!;
+      return route.fulfill({ json: richMenu(date) });
+    });
+    await page.goto("/");
+    await expect(tab(page, wednesday)).toHaveAccessibleName(`${expectedTabLabels.en[2]} ${menuCopy.en.available}`);
+    await page.evaluate(() => document.fonts.ready);
+    const strip = page.getByRole("tablist");
+    await expect(strip.getByRole("tab")).toHaveCount(7);
+    const { scrollWidth, clientWidth, scrollLeft } = await strip.evaluate(element => ({
+      scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, scrollLeft: element.scrollLeft,
+    }));
+    expect(scrollWidth).toBe(clientWidth);
+    expect(scrollLeft).toBe(0);
+  } finally {
+    await context.close();
+  }
+});
 
 const liveLayouts = [
   ...languages.flatMap(language => themes.map(theme => ({ size: "mobile" as const, language, theme }))),
@@ -346,14 +370,14 @@ test("uses browser language without a modal and remembers a dismissed hint", asy
   try {
     await fixtureMenu(page);
     await page.goto("/");
-    await expect(page.getByText(menuCopy.zh.welcome("中文"))).toBeVisible();
+    await expect(page.getByText(menuCopy.zh.welcome)).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("button", { name: menuCopy.zh.change, exact: true }).click();
     await expect(page.getByRole("button", { name: "中文", exact: true })).toBeFocused();
     await page.getByRole("button", { name: menuCopy.zh.close }).click();
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", "zh");
-    await expect(page.getByText(menuCopy.zh.welcome("中文"))).toHaveCount(0);
+    await expect(page.getByText(menuCopy.zh.welcome)).toHaveCount(0);
     await page.getByRole("button", { name: "Svenska", exact: true }).click();
     await expect(page.getByRole("heading", { name: dateLabel(monday, "sv") })).toBeVisible();
     await page.reload();

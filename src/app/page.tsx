@@ -8,7 +8,7 @@ import { DateTabs } from "../components/DateTabs";
 import type { DateTabsRef } from "../components/DateTabs";
 import { MenuStatus } from "../components/MenuStatus";
 import { readPreference, writePreference } from "../lib/browser-storage";
-import { dateInKorea, LANGUAGES, PENGUIN, selectLanguage, timeInKorea } from "../lib/menu";
+import { dateInKorea, PENGUIN, selectLanguage, timeInKorea } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import type { Language } from "../types/menu";
 
@@ -75,14 +75,14 @@ export default function Home() {
           <aside className="flex items-start gap-2">
             <Image src={PENGUIN.welcome} alt="" width={48} height={48} className="shrink-0" />
             <div className="menu-speech flex flex-1 items-start justify-between gap-1 rounded-xl px-3 py-2 text-sm leading-relaxed">
-              <p>{copy.welcome(LANGUAGES[language].name)}{" · "}
+              <p>{copy.welcome}{" · "}
                 <button type="button" className="rounded-sm font-semibold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => document.getElementById(`${LANGUAGE_SWITCH_ID}-${language}`)?.focus()}>
                   {copy.change}
                 </button>
               </p>
               <button type="button" onClick={dismissWelcome} aria-label={copy.close}
-                className="shrink-0 rounded-md p-1 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/10">
+                className="shrink-0 rounded-md p-1 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
@@ -98,6 +98,9 @@ export default function Home() {
           className="rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Made by Sungwoon Song
         </a>
+        <p className="mt-1.5 hidden text-xs text-muted-foreground sm:block">
+          Though I&apos;ve moved on from Ericsson, I hope this site helps my former colleagues enjoy their meals.
+        </p>
       </footer>
     </div>
   );

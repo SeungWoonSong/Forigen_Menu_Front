@@ -13,7 +13,7 @@ export const menuCopy = {
     spice: ["안 매움", "약간 매움", "보통 매움", "매움"], vegetarian: "채식", vegan: "비건",
     contains: (items: string) => `함유 · ${items}`, mayContain: (items: string) => `함유 가능 · ${items}`,
     allergy: "알레르기가 있으면 식당 직원에게 확인해 주세요.",
-    welcome: (language: string) => `브라우저 언어 설정에 따라 ${language} 메뉴를 보여 드립니다`,
+    welcome: "브라우저 언어에 맞춰 한국어로 보여 드려요",
     change: "바꾸기", close: "닫기", languages: "언어 선택", theme: "테마 전환",
   },
   en: {
@@ -28,7 +28,7 @@ export const menuCopy = {
     spice: ["Not spicy", "Mild", "Medium", "Hot"], vegetarian: "Vegetarian", vegan: "Vegan",
     contains: (items: string) => `Contains · ${items}`, mayContain: (items: string) => `May contain · ${items}`,
     allergy: "If you have an allergy, please check with cafeteria staff.",
-    welcome: (language: string) => `Your browser language settings are showing the menu in ${language}`,
+    welcome: "Showing English from your browser settings",
     change: "Change", close: "Close", languages: "Choose language", theme: "Toggle theme",
   },
   zh: {
@@ -43,7 +43,7 @@ export const menuCopy = {
     spice: ["不辣", "微辣", "中辣", "特辣"], vegetarian: "素食", vegan: "纯素",
     contains: (items: string) => `含有 · ${items}`, mayContain: (items: string) => `可能含有 · ${items}`,
     allergy: "如有食物过敏，请向食堂工作人员确认。",
-    welcome: (language: string) => `已根据浏览器语言设置显示${language}菜单`,
+    welcome: "已按浏览器语言显示中文",
     change: "更改", close: "关闭", languages: "选择语言", theme: "切换主题",
   },
   sv: {
@@ -58,7 +58,7 @@ export const menuCopy = {
     spice: ["Inte stark", "Mild", "Medelstark", "Stark"], vegetarian: "Vegetarisk", vegan: "Vegansk",
     contains: (items: string) => `Innehåller · ${items}`, mayContain: (items: string) => `Kan innehålla · ${items}`,
     allergy: "Fråga restaurangpersonalen om du har en allergi.",
-    welcome: (language: string) => `Menyn visas på ${language} enligt webbläsarens språkinställningar`,
+    welcome: "Visar svenska enligt din webbläsare",
     change: "Ändra", close: "Stäng", languages: "Välj språk", theme: "Byt tema",
   },
 };

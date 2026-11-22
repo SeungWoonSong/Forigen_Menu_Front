@@ -49,22 +49,6 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        lunch: {
-          DEFAULT: "hsl(var(--lunch))",
-          foreground: "hsl(var(--lunch-foreground))",
-        },
-        dinner: {
-          DEFAULT: "hsl(var(--dinner))",
-          foreground: "hsl(var(--dinner-foreground))",
-        },
-        salad: {
-          DEFAULT: "hsl(var(--salad))",
-          foreground: "hsl(var(--salad-foreground))",
-        },
-        dessert: {
-          DEFAULT: "hsl(var(--dessert))",
-          foreground: "hsl(var(--dessert-foreground))",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",

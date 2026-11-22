@@ -22,8 +22,8 @@ function Details({ item, language, sheet }: { item: SideItem; language: Language
   return (
     <div className="space-y-2">
       <div>
-        {sheet ? <Dialog.Title className="pr-8 text-xl font-bold">{item.name}</Dialog.Title> :
-          <p className="font-bold">{item.name}</p>}
+        {sheet ? <Dialog.Title className="pr-8 text-xl font-semibold">{item.name}</Dialog.Title> :
+          <p className="font-semibold">{item.name}</p>}
         {item.original_name && <p lang="ko" className="mt-0.5 text-sm text-muted-foreground">{item.original_name}</p>}
       </div>
       {sheet ? <Dialog.Description className="text-sm leading-relaxed">{item.summary}</Dialog.Description> :
@@ -44,9 +44,9 @@ function SideDetails({ item, language, className, narrow }: { item: SideItem; la
         <Dialog.Trigger className={triggerClass}>{item.name}</Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
-          <Dialog.Content className="menu-side-sheet fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-3xl border bg-popover p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-popover-foreground shadow-xl">
+          <Dialog.Content className="menu-side-sheet fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl border bg-popover p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-popover-foreground shadow-xl">
             <Details item={item} language={language} sheet />
-            <Dialog.Close aria-label={menuCopy[language].close} className="absolute right-4 top-4 rounded-full p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Dialog.Close aria-label={menuCopy[language].close} className="absolute right-4 top-4 rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <X size={20} aria-hidden="true" />
             </Dialog.Close>
           </Dialog.Content>
@@ -82,7 +82,7 @@ export function SideChips({ items, language }: { items: SideItem[]; language: La
     <Tooltip.Provider delayDuration={180}>
       <ul className="flex flex-wrap gap-1.5">
         {items.map((item, index) => {
-          const className = cn("inline-block min-h-7 max-w-full whitespace-normal rounded-full border bg-muted/50 px-2.5 py-1 text-left text-xs font-medium [overflow-wrap:anywhere]",
+          const className = cn("inline-block min-h-7 max-w-full whitespace-normal rounded-md border bg-muted px-2.5 py-1 text-left text-xs font-medium [overflow-wrap:anywhere]",
             isStaple(item.original_name) && "border-dashed bg-transparent text-muted-foreground");
           return (
             <li key={`${item.name}-${index}`} className="min-w-0 max-w-full">

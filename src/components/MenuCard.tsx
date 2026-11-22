@@ -4,14 +4,8 @@ import { useId } from "react";
 import type { DayMenu, Language, MenuItem } from "../types/menu";
 import { cornerLabel, dateLabel, extraMenuChips, extraMenuMeal, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
-import { cn } from "../lib/utils";
 import { DietaryTags } from "./DietaryTags";
 import { SideChips } from "./SideChips";
-
-const mealStyles = {
-  lunch: "text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-950",
-  dinner: "text-violet-800 bg-violet-100 dark:text-violet-200 dark:bg-violet-950",
-};
 
 function PenguinTip({ image, label, text }: { image: string; label: string; text?: string }) {
   return (
@@ -25,7 +19,7 @@ function PenguinTip({ image, label, text }: { image: string; label: string; text
   );
 }
 
-function DishCard({ item, language, meal }: { item: MenuItem; language: Language; meal: "lunch" | "dinner" }) {
+function DishCard({ item, language }: { item: MenuItem; language: Language }) {
   const copy = menuCopy[language];
   const { info } = item;
   const detail = info?.detail || item.description;
@@ -34,14 +28,14 @@ function DishCard({ item, language, meal }: { item: MenuItem; language: Language
     <article className="min-w-0 space-y-3 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
       {(item.corner_name || item.original_name) && (
         <div className="flex items-baseline justify-between gap-3">
-          {item.corner_name && <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold", mealStyles[meal])}>
+          {item.corner_name && <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
             {cornerLabel(item.corner_name, language)}
           </span>}
           {item.original_name && <span lang="ko" className="ml-auto text-right text-xs text-muted-foreground">{item.original_name}</span>}
         </div>
       )}
       <div className="space-y-1.5">
-        <h4 className="text-xl font-bold leading-tight tracking-tight sm:text-2xl">{item.name}</h4>
+        <h4 className="text-xl font-semibold leading-tight sm:text-2xl">{item.name}</h4>
         {info?.summary && <p className="text-sm font-semibold leading-relaxed">{info.summary}</p>}
         {detail && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground sm:text-base">{detail}</p>}
       </div>
@@ -65,12 +59,12 @@ function ExtraMenu({ item, kind, language }: { item: MenuItem; kind: "selfServic
   return (
     <section className="space-y-2 rounded-2xl border bg-card p-4 sm:p-5">
       <h4 className="flex items-center gap-2 text-sm font-semibold">
-        <Icon size={17} aria-hidden="true" className="text-emerald-700 dark:text-emerald-300" />
+        <Icon size={17} aria-hidden="true" className="text-muted-foreground" />
         {menuCopy[language][kind]}
       </h4>
       {kind === "salad" && <h5 className="text-base font-semibold">{item.name}</h5>}
       {chips.length > 0 && <ul className="flex flex-wrap gap-1.5">
-        {chips.map(name => <li key={name} className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs">{name}</li>)}
+        {chips.map(name => <li key={name} className="rounded-md border bg-muted px-2.5 py-1 text-xs">{name}</li>)}
       </ul>}
     </section>
   );
@@ -85,7 +79,7 @@ export function MenuCard({ menu, language, dinnerFirst }: { menu: DayMenu; langu
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{dateLabel(menu.date, language)}</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">{dateLabel(menu.date, language)}</h2>
         {updatedAt && Number.isFinite(updatedAt.getTime()) &&
           <time dateTime={menu.updated_at} className="text-xs text-muted-foreground">{copy.updated(timeInKorea(updatedAt))}</time>}
       </div>
@@ -94,10 +88,10 @@ export function MenuCard({ menu, language, dinnerFirst }: { menu: DayMenu; langu
         return (
           <section key={meal} aria-labelledby={`${headingId}-${meal}`} className="space-y-2.5">
             <h3 id={`${headingId}-${meal}`} className="flex items-center gap-2.5 text-lg font-semibold">
-              <span className={cn("rounded-lg p-1.5", mealStyles[meal])}><Icon size={18} aria-hidden="true" /></span>
+              <Icon size={18} aria-hidden="true" className="text-muted-foreground" />
               {copy[meal]}
             </h3>
-            {menu[meal].length ? menu[meal].map(item => <DishCard key={item.id} item={item} language={language} meal={meal} />) :
+            {menu[meal].length ? menu[meal].map(item => <DishCard key={item.id} item={item} language={language} />) :
               <p className="px-1 text-sm text-muted-foreground">{copy.noMeal}</p>}
             {menu.salad && extraMenuMeal(menu.salad) === meal && <ExtraMenu item={menu.salad} kind="salad" language={language} />}
             {menu.dessert && extraMenuMeal(menu.dessert) === meal && <ExtraMenu item={menu.dessert} kind="selfService" language={language} />}

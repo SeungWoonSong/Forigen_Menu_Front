@@ -4,80 +4,49 @@
 
 @layer base {
   :root {
-    --background: 36 42% 97%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --background: 36 33% 97%;
+    --foreground: 25 15% 10%;
+    --card: 36 40% 99%;
+    --card-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --primary: var(--foreground);
+    --primary-foreground: var(--background);
+    --secondary: var(--muted);
+    --secondary-foreground: var(--foreground);
+    --muted: 34 20% 93%;
+    --muted-foreground: 28 8% 38%;
+    --accent: var(--muted);
+    --accent-foreground: var(--foreground);
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --border: 30 15% 87%;
+    --input: var(--border);
+    --ring: 22 52% 40%;
     --radius: 0.75rem;
     --menu-accent: 22 52% 88%;
     --menu-accent-foreground: 19 66% 24%;
-    --menu-speech: 32 74% 92%;
-
-    /* Custom meal colors */
-    --lunch: 24 95% 53%;
-    --lunch-foreground: 26 83% 14%;
-    --dinner: 262 83% 58%;
-    --dinner-foreground: 263 70% 15%;
-    --salad: 142 71% 45%;
-    --salad-foreground: 144 61% 10%;
-    --dessert: 330 81% 60%;
-    --dessert-foreground: 329 73% 14%;
+    --menu-available: 150 25% 40%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 8%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 8%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 28 10% 7%;
+    --foreground: 36 20% 95%;
+    --card: 28 9% 10%;
+    --muted: 28 8% 16%;
+    --muted-foreground: 32 8% 66%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 28 8% 20%;
+    --ring: 22 45% 60%;
     --menu-accent: 24 48% 24%;
     --menu-accent-foreground: 30 90% 88%;
-    --menu-speech: 26 28% 17%;
-
-    /* Custom meal colors - dark mode */
-    --lunch: 28 100% 62%;
-    --lunch-foreground: 0 0% 100%;
-    --dinner: 265 89% 72%;
-    --dinner-foreground: 0 0% 100%;
-    --salad: 142 69% 58%;
-    --salad-foreground: 0 0% 100%;
-    --dessert: 330 85% 70%;
-    --dessert-foreground: 0 0% 100%;
+    --menu-available: 150 25% 60%;
   }
 }
 
 .menu-speech {
   position: relative;
-  background: hsl(var(--menu-speech));
+  background: hsl(var(--muted));
 }
 
 .menu-speech::before {
