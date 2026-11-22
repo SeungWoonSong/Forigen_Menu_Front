@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
+    --background: 36 42% 97%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
@@ -24,6 +24,9 @@
     --input: 240 5.9% 90%;
     --ring: 240 5.9% 10%;
     --radius: 0.75rem;
+    --menu-accent: 22 52% 88%;
+    --menu-accent-foreground: 19 66% 24%;
+    --menu-speech: 32 74% 92%;
 
     /* Custom meal colors */
     --lunch: 24 95% 53%;
@@ -56,6 +59,9 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
+    --menu-accent: 24 48% 24%;
+    --menu-accent-foreground: 30 90% 88%;
+    --menu-speech: 26 28% 17%;
 
     /* Custom meal colors - dark mode */
     --lunch: 28 100% 62%;
@@ -67,6 +73,33 @@
     --dessert: 330 85% 70%;
     --dessert-foreground: 0 0% 100%;
   }
+}
+
+.menu-speech {
+  position: relative;
+  background: hsl(var(--menu-speech));
+}
+
+.menu-speech::before {
+  content: "";
+  position: absolute;
+  top: 0.75rem;
+  left: -0.19rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  transform: rotate(45deg);
+  background: inherit;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .menu-side-sheet[data-state="open"] {
+    animation: menu-sheet-enter 180ms ease-out;
+  }
+}
+
+@keyframes menu-sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 @layer base {

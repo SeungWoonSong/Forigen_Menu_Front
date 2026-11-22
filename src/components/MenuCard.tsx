@@ -1,300 +1,98 @@
-"use client"
+import Image from "next/image";
+import { Moon, Salad, Soup, Sun } from "lucide-react";
+import type { DayMenu, Language, MenuItem } from "../types/menu";
+import { cornerLabel, dateLabel, extraMenuChips, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
+import { menuCopy } from "../lib/menu-copy";
+import { cn } from "../lib/utils";
+import { DietaryTags } from "./DietaryTags";
+import { SideChips } from "./SideChips";
 
-import { DayMenu as DayMenuType, MenuItem } from "@/types/menu"
-import { format, parse } from "date-fns"
-import { ko, enUS, zhCN, sv } from "date-fns/locale"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { Badge } from "./ui/badge"
-import { Sun, Moon, Salad, Cookie } from "lucide-react"
-import { motion } from "framer-motion"
-import Image from "next/image"
+const mealStyles = {
+  lunch: "text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-950",
+  dinner: "text-violet-800 bg-violet-100 dark:text-violet-200 dark:bg-violet-950",
+};
 
-interface MenuCardProps {
-  menu: DayMenuType
-}
-
-const locales = {
-  ko,
-  en: enUS,
-  zh: zhCN,
-  sv,
-}
-
-const dateFormats = {
-  ko: "M월 d일 (EEEE)",
-  en: "MMMM d, EEEE",
-  zh: "M月d日 EEEE",
-  sv: "d MMMM, EEEE",
-}
-
-interface MealSectionProps {
-  title: string
-  icon: React.ReactNode
-  items: MenuItem[]
-  variant: "lunch" | "dinner" | "salad" | "dessert"
-  emptyMessage: string
-}
-
-function MealSection({
-  title,
-  icon,
-  items,
-  variant,
-  emptyMessage,
-}: MealSectionProps) {
-  const bgColors = {
-    lunch: "bg-lunch/5 dark:bg-lunch/10",
-    dinner: "bg-dinner/5 dark:bg-dinner/10",
-    salad: "bg-salad/5 dark:bg-salad/10",
-    dessert: "bg-dessert/5 dark:bg-dessert/10",
-  }
-
-  const borderColors = {
-    lunch: "border-l-lunch",
-    dinner: "border-l-dinner",
-    salad: "border-l-salad",
-    dessert: "border-l-dessert",
-  }
-
-  const textColors = {
-    lunch: "text-lunch",
-    dinner: "text-dinner",
-    salad: "text-salad",
-    dessert: "text-dessert",
-  }
+function DishCard({ item, language, meal }: { item: MenuItem; language: Language; meal: "lunch" | "dinner" }) {
+  const copy = menuCopy[language];
+  const { info } = item;
+  const detail = info?.detail || item.description;
 
   return (
-    <div className={`rounded-xl ${bgColors[variant]} p-4`}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className={textColors[variant]}>{icon}</span>
-        <h3 className={`font-semibold ${textColors[variant]}`}>{title}</h3>
-      </div>
-
-      {items.length > 0 ? (
-        <div className="space-y-3">
-          {items.map((item, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className={`border-l-4 ${borderColors[variant]} pl-3 py-1`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <h4 className="font-medium text-foreground">{item.name}</h4>
-                {item.corner_name && (
-                  <Badge variant={variant} className="text-xs shrink-0">
-                    {item.corner_name}
-                  </Badge>
-                )}
-              </div>
-              {item.description && (
-                <p className="text-sm text-muted-foreground mt-1 italic">
-                  {item.description}
-                </p>
-              )}
-              {item.sub_menus && item.sub_menus.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {item.sub_menus.map((subItem, subIndex) => (
-                    <li
-                      key={subIndex}
-                      className="text-sm text-muted-foreground flex items-start gap-1.5"
-                    >
-                      <span className="text-muted-foreground/50">•</span>
-                      {subItem}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </motion.div>
-          ))}
+    <article className="min-w-0 space-y-3 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+      {(item.corner_name || item.original_name) && (
+        <div className="flex items-baseline justify-between gap-3">
+          {item.corner_name && <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold", mealStyles[meal])}>
+            {cornerLabel(item.corner_name, language)}
+          </span>}
+          {item.original_name && <span lang="ko" className="ml-auto text-right text-xs text-muted-foreground">{item.original_name}</span>}
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground italic">{emptyMessage}</p>
       )}
-    </div>
-  )
-}
-
-function SingleItemSection({
-  title,
-  icon,
-  item,
-  variant,
-}: {
-  title: string
-  icon: React.ReactNode
-  item: MenuItem
-  variant: "salad" | "dessert"
-}) {
-  const bgColors = {
-    salad: "bg-salad/5 dark:bg-salad/10",
-    dessert: "bg-dessert/5 dark:bg-dessert/10",
-  }
-
-  const borderColors = {
-    salad: "border-l-salad",
-    dessert: "border-l-dessert",
-  }
-
-  const textColors = {
-    salad: "text-salad",
-    dessert: "text-dessert",
-  }
-
-  return (
-    <div className={`rounded-xl ${bgColors[variant]} p-4`}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className={textColors[variant]}>{icon}</span>
-        <h3 className={`font-semibold ${textColors[variant]}`}>{title}</h3>
+      <div className="space-y-1.5">
+        <h4 className="text-xl font-bold leading-tight tracking-tight sm:text-2xl">{item.name}</h4>
+        {info?.summary && <p className="text-sm font-semibold leading-relaxed">{info.summary}</p>}
+        {detail && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground sm:text-base">{detail}</p>}
       </div>
+      <DietaryTags info={info} language={language} />
+      {(info?.similar_to || info?.how_to_eat) && (
+        <aside className="flex items-start gap-2">
+          <Image src={PENGUIN.mascot} alt="" width={32} height={32} className="shrink-0" />
+          <dl className="menu-speech min-w-0 space-y-1.5 rounded-xl px-3 py-2 text-sm leading-relaxed">
+            {info.similar_to && <div><dt className="inline font-semibold">{copy.similar}</dt>{" · "}<dd className="inline">{info.similar_to}</dd></div>}
+            {info.how_to_eat && <div><dt className="inline font-semibold">{copy.howToEat}</dt>{" · "}<dd className="inline">{info.how_to_eat}</dd></div>}
+          </dl>
+        </aside>
+      )}
+      <SideChips items={sideItems(item)} language={language} />
+    </article>
+  );
+}
 
-      <div className={`border-l-4 ${borderColors[variant]} pl-3 py-1`}>
-        <h4 className="font-medium text-foreground">{item.name}</h4>
-        {item.description && (
-          <p className="text-sm text-muted-foreground mt-1 italic">
-            {item.description}
-          </p>
-        )}
-        {item.sub_menus && item.sub_menus.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {item.sub_menus.map((subItem, subIndex) => (
-              <li
-                key={subIndex}
-                className="text-sm text-muted-foreground flex items-start gap-1.5"
-              >
-                <span className="text-muted-foreground/50">•</span>
-                {subItem}
-              </li>
-            ))}
-          </ul>
-        )}
+function ExtraMenu({ item, kind, language }: { item: MenuItem; kind: "selfService" | "salad"; language: Language }) {
+  const Icon = kind === "selfService" ? Soup : Salad;
+  const chips = extraMenuChips(item, kind);
+  return (
+    <section className="space-y-2 rounded-2xl border bg-card p-4 sm:p-5">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <Icon size={17} aria-hidden="true" className="text-emerald-700 dark:text-emerald-300" />
+        {menuCopy[language][kind]}
+      </h3>
+      {kind === "salad" && <h4 className="text-base font-semibold">{item.name}</h4>}
+      {chips.length > 0 && <ul className="flex flex-wrap gap-1.5">
+        {chips.map(name => <li key={name} className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs">{name}</li>)}
+      </ul>}
+    </section>
+  );
+}
+
+export function MenuCard({ menu, language, dinnerFirst }: { menu: DayMenu; language: Language; dinnerFirst: boolean }) {
+  const copy = menuCopy[language];
+  const order = dinnerFirst ? (["dinner", "lunch"] as const) : (["lunch", "dinner"] as const);
+  const updatedAt = menu.updated_at ? new Date(menu.updated_at) : undefined;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{dateLabel(menu.date, language)}</h2>
+        {updatedAt && Number.isFinite(updatedAt.getTime()) &&
+          <time dateTime={menu.updated_at} className="text-xs text-muted-foreground">{copy.updated(timeInKorea(updatedAt))}</time>}
       </div>
+      {order.map(meal => {
+        const Icon = meal === "lunch" ? Sun : Moon;
+        return (
+          <section key={meal} className="space-y-2.5">
+            <h3 className="flex items-center gap-2.5 text-lg font-semibold">
+              <span className={cn("rounded-lg p-1.5", mealStyles[meal])}><Icon size={18} aria-hidden="true" /></span>
+              {copy[meal]}
+            </h3>
+            {menu[meal].length ? menu[meal].map(item => <DishCard key={item.id} item={item} language={language} meal={meal} />) :
+              <p className="px-1 text-sm text-muted-foreground">{copy.noMeal}</p>}
+          </section>
+        );
+      })}
+      {(menu.dessert || menu.salad) && <div className="space-y-2.5">
+        {menu.dessert && <ExtraMenu item={menu.dessert} kind="selfService" language={language} />}
+        {menu.salad && <ExtraMenu item={menu.salad} kind="salad" language={language} />}
+      </div>}
     </div>
-  )
+  );
 }
-
-export function MenuCard({ menu }: MenuCardProps) {
-  const date = parse(menu.date, "yyyyMMdd", new Date())
-  const locale = locales[menu.language as keyof typeof locales] || enUS
-  const dateFormat =
-    dateFormats[menu.language as keyof typeof dateFormats] || dateFormats.en
-  const formattedDate = format(date, dateFormat, { locale })
-
-  const noMenuText = {
-    ko: "메뉴가 없습니다",
-    en: "No menu available",
-    zh: "没有菜单",
-    sv: "Ingen meny tillgänglig",
-  }
-
-  const mealLabels = {
-    lunch: { ko: "점심", en: "Lunch", zh: "午餐", sv: "Lunch" },
-    dinner: { ko: "저녁", en: "Dinner", zh: "晚餐", sv: "Middag" },
-    salad: { ko: "샐러드", en: "Salad", zh: "沙拉", sv: "Sallad" },
-    dessert: { ko: "디저트", en: "Dessert", zh: "甜点", sv: "Efterrätt" },
-  }
-
-  const lang = menu.language as keyof typeof noMenuText
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-xl text-center">{formattedDate}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <MealSection
-          title={mealLabels.lunch[lang] || "Lunch"}
-          icon={<Sun className="h-5 w-5" />}
-          items={menu.lunch}
-          variant="lunch"
-          emptyMessage={noMenuText[lang] || noMenuText.en}
-        />
-
-        {menu.salad && (
-          <SingleItemSection
-            title={mealLabels.salad[lang] || "Salad"}
-            icon={<Salad className="h-5 w-5" />}
-            item={menu.salad}
-            variant="salad"
-          />
-        )}
-
-        {menu.dessert && (
-          <SingleItemSection
-            title={mealLabels.dessert[lang] || "Dessert"}
-            icon={<Cookie className="h-5 w-5" />}
-            item={menu.dessert}
-            variant="dessert"
-          />
-        )}
-
-        <MealSection
-          title={mealLabels.dinner[lang] || "Dinner"}
-          icon={<Moon className="h-5 w-5" />}
-          items={menu.dinner}
-          variant="dinner"
-          emptyMessage={noMenuText[lang] || noMenuText.en}
-        />
-      </CardContent>
-    </Card>
-  )
-}
-
-export function MenuCardSkeleton() {
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-3">
-        <div className="h-7 w-48 mx-auto bg-muted animate-pulse rounded" />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl bg-muted/50 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 bg-muted animate-pulse rounded" />
-              <div className="h-5 w-16 bg-muted animate-pulse rounded" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
-              <div className="h-3 w-1/2 bg-muted animate-pulse rounded" />
-              <div className="h-3 w-2/3 bg-muted animate-pulse rounded" />
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  )
-}
-
-export function EmptyMenuCard({ language }: { language: string }) {
-  const messages = {
-    ko: "오늘은 메뉴가 없습니다",
-    en: "No menu available today",
-    zh: "今天没有菜单",
-    sv: "Ingen meny tillgänglig idag",
-  }
-
-  return (
-    <Card className="overflow-hidden">
-      <CardContent className="py-10 flex flex-col items-center justify-center text-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, type: "spring" }}
-        >
-          <Image
-            src="/NoMenu.png"
-            alt="No menu penguin"
-            width={160}
-            height={160}
-            className="mb-2"
-          />
-        </motion.div>
-        <p className="text-lg text-muted-foreground">
-          {messages[language as keyof typeof messages] || messages.en}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
