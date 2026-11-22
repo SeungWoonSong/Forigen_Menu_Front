@@ -5,7 +5,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { X } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import type { Language, SideItem } from "../types/menu";
-import { isStaple } from "../lib/menu";
+import { displayOriginalName, isStaple } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import { cn } from "../lib/utils";
 import { DietaryTags } from "./DietaryTags";
@@ -19,12 +19,14 @@ function subscribeToViewport(callback: () => void) {
 const isNarrow = () => window.matchMedia(narrowViewport).matches;
 
 function Details({ item, language, sheet }: { item: SideItem; language: Language; sheet?: boolean }) {
+  const originalName = displayOriginalName(item, language);
+
   return (
     <div className="space-y-2">
       <div>
         {sheet ? <Dialog.Title className="pr-8 text-xl font-semibold">{item.name}</Dialog.Title> :
           <p className="font-semibold">{item.name}</p>}
-        {item.original_name && <p lang="ko" className="mt-0.5 text-sm text-muted-foreground">{item.original_name}</p>}
+        {originalName && <p lang="ko" className="mt-0.5 text-sm text-muted-foreground">{originalName}</p>}
       </div>
       {sheet ? <Dialog.Description className="text-sm leading-relaxed">{item.summary}</Dialog.Description> :
         <p className="text-sm leading-relaxed">{item.summary}</p>}

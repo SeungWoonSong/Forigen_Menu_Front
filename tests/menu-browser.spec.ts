@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { dateLabel, LANGUAGES } from "../src/lib/menu";
 import { menuCopy } from "../src/lib/menu-copy";
 import type { Language } from "../src/types/menu";
-import { emptyMenu, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
+import { emptyMenu, koreanDish, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
 
 const monday = "20261123";
 const tuesday = "20261124";
@@ -410,6 +410,37 @@ test("uses browser language without a modal and remembers a dismissed hint", asy
     await context.close();
   }
 });
+
+for (const size of Object.keys(sizes) as Size[]) {
+  test(`shows Korean menu names only once on ${size}`, async ({ browser }) => {
+    const { page, context } = await setup(browser, size, { language: "ko" });
+    try {
+      await page.route(menuRoute, route => {
+        const date = new URL(route.request().url()).pathname.split("/").pop()!;
+        const menu = emptyMenu(date, "ko");
+        return route.fulfill({ json: { ...menu, lunch: date === monday ? [koreanDish] : [] } });
+      });
+      await page.goto("/");
+      const card = page.locator("article").filter({ has: page.getByRole("heading", { name: koreanDish.name, exact: true }) });
+      await expect(card.getByText(koreanDish.name, { exact: true })).toHaveCount(1);
+      await expect(card.getByText("코너1", { exact: true })).toBeVisible();
+      for (const side of koreanDish.sub_items!) {
+        const chip = card.getByRole("button", { name: side.name, exact: true });
+        const details = size === "mobile" ? page.getByRole("dialog", { name: side.name })
+          : page.locator("[data-radix-popper-content-wrapper]");
+        if (size === "mobile") await chip.tap();
+        else await chip.hover();
+        await expect(details.getByText(side.summary!, { exact: true })).toBeVisible();
+        await expect(details.getByText(side.name, { exact: true })).toHaveCount(1);
+        await expect(details.locator('[lang="ko"]')).toHaveCount(0);
+        await page.keyboard.press("Escape");
+        await expect(details).toHaveCount(0);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+}
 
 test("renders rich API fields and opens a dismissible mobile side sheet", async ({ browser }, info) => {
   const { page, context } = await setup(browser, "mobile");
