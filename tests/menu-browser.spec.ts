@@ -131,6 +131,11 @@ for (const width of [390, 375, 430]) {
           }
           await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
           await expectViewportWidth(page, width);
+          const strip = (await dateStrip.boundingBox())!;
+          const todayBox = (await today.boundingBox())!;
+          const tomorrowBox = (await tomorrow.boundingBox())!;
+          expect(todayBox.x).toBeGreaterThanOrEqual(strip.x);
+          expect(tomorrowBox.x + tomorrowBox.width).toBeLessThanOrEqual(strip.x + strip.width + 1);
           await tomorrow.tap();
           await expect(tomorrow).toHaveAttribute("aria-selected", "true");
           await expect(today).toHaveAttribute("aria-selected", "false");

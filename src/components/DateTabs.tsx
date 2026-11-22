@@ -69,10 +69,15 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     const strip = list.current;
     const active = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (strip && active) {
-      strip.scrollLeft += active.getBoundingClientRect().left - strip.getBoundingClientRect().left
+      const bounds = strip.getBoundingClientRect();
+      const centerOffset = active.getBoundingClientRect().left - bounds.left
         - (strip.clientWidth - active.offsetWidth) / 2;
+      const next = selected === today ? active.nextElementSibling : null;
+      strip.scrollLeft += next
+        ? Math.max(centerOffset, next.getBoundingClientRect().right - bounds.right)
+        : centerOffset;
     }
-  }, [selected, dates, language]);
+  }, [selected, dates, language, initialReady, today]);
 
   function navigate(date: string) {
     setDates(current => {
