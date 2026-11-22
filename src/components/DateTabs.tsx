@@ -70,23 +70,27 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     const active = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (!strip || !active || strip.scrollWidth <= strip.clientWidth) return;
 
+    const viewportWidth = strip.clientWidth;
+    const maxScroll = strip.scrollWidth - viewportWidth;
+    const origin = strip.getBoundingClientRect().left - strip.scrollLeft;
     const inset = parseFloat(getComputedStyle(strip).scrollPaddingInlineStart);
-    strip.scrollLeft += active.getBoundingClientRect().left - strip.getBoundingClientRect().left - inset;
-  }, [selected, dates, language, initialReady]);
+    const selectedTab = active.getBoundingClientRect();
+    const nearbyTab = selected === today ? active.nextElementSibling
+      : selected === defaultDate ? strip.querySelector('[aria-current="date"]') : null;
+    const nearby = nearbyTab?.getBoundingClientRect() ?? selectedTab;
+    const centered = selectedTab.left - origin - (viewportWidth - selectedTab.width) / 2;
+    const positions = Array.from(strip.querySelectorAll('[role="tab"]'), tab =>
+      Math.min(maxScroll, Math.max(0, tab.getBoundingClientRect().left - origin - inset)),
+    );
+    positions.sort((a, b) => Math.abs(a - centered) - Math.abs(b - centered));
 
-  useEffect(() => {
-    const strip = list.current;
-    if (!strip) return;
-
-    // Start-aligned snapping can leave a partial label at the opposite edge.
-    const observer = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        entry.target.parentElement?.toggleAttribute("data-clipped", entry.intersectionRatio < 1);
-      }
-    }, { root: strip, threshold: 1 });
-    strip.querySelectorAll("[data-date-label]").forEach(label => observer.observe(label));
-    return () => observer.disconnect();
-  }, [dates]);
+    const fits = (position: number, left: number, right: number) =>
+      position <= left - origin + 1 && position + viewportWidth >= right - origin - 1;
+    // Prefer a snap point that shows both relevant dates, then one that shows the selection.
+    strip.scrollLeft = positions.find(position =>
+      fits(position, Math.min(selectedTab.left, nearby.left), Math.max(selectedTab.right, nearby.right)),
+    ) ?? positions.find(position => fits(position, selectedTab.left, selectedTab.right)) ?? positions[0];
+  }, [selected, dates, language, initialReady, defaultDate, today]);
 
   function navigate(date: string) {
     setDates(current => {
@@ -115,18 +119,20 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
       <div className="flex items-center gap-1.5 sm:gap-2">
         <Button type="button" variant="outline" size="icon" aria-label={copy.earlier} className="h-9 w-8 shrink-0 bg-card"
           onClick={() => navigate(shiftDay(selected, -1))}><ChevronLeft size={17} aria-hidden="true" /></Button>
-        <TabsList ref={list} aria-label={copy.dates} className="h-auto min-w-0 bg-card ring-1 ring-inset ring-border">
-          {dates.map(date => {
-            const available = menuState(date, today, results[date]) === "menu";
-            return (
-              <TabsTrigger key={date} value={date} aria-current={date === today ? "date" : undefined}
-                className="group relative h-7 flex-1 gap-1.5 px-2 py-0 text-xs aria-[current=date]:font-bold focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] data-[state=inactive]:aria-[current=date]:text-foreground sm:px-1.5">
-                <span data-date-label className="group-data-[clipped]:opacity-0">{dateTabLabel(date, language, today, tomorrow)}</span>
-                {available && <><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--menu-available))] group-data-[clipped]:opacity-0" /><span className="sr-only">{copy.available}</span></>}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+        <div className="menu-date-strip relative flex min-w-0 flex-1 overflow-hidden rounded-[10px] border bg-card">
+          <TabsList ref={list} aria-label={copy.dates} className="h-auto bg-card">
+            {dates.map(date => {
+              const available = menuState(date, today, results[date]) === "menu";
+              return (
+                <TabsTrigger key={date} value={date} aria-current={date === today ? "date" : undefined}
+                  className="relative h-7 flex-1 gap-1.5 px-2 py-0 text-xs aria-[current=date]:font-bold focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:bg-[hsl(var(--menu-accent))] data-[state=active]:text-[hsl(var(--menu-accent-foreground))] data-[state=inactive]:aria-[current=date]:text-foreground sm:px-1.5">
+                  <span>{dateTabLabel(date, language, today, tomorrow)}</span>
+                  {available && <><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--menu-available))]" /><span className="sr-only">{copy.available}</span></>}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
         <Button type="button" variant="outline" size="icon" aria-label={copy.later} className="h-9 w-8 shrink-0 bg-card"
           onClick={() => navigate(shiftDay(selected, 1))}><ChevronRight size={17} aria-hidden="true" /></Button>
       </div>

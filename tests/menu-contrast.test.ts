@@ -15,8 +15,18 @@ function palette(selector: string) {
   return tokens;
 }
 
-function luminance(hsl: string | undefined) {
-  const match = hsl?.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/);
+function colorValue(tokens: Map<string, string>, name: string, visited = new Set<string>()): string {
+  assert.ok(!visited.has(name), `Circular color token alias: ${name}`);
+  const value = tokens.get(name);
+  assert.ok(value, `Missing color token: ${name}`);
+  const alias = value.match(/^var\((--[\w-]+)\)$/);
+  if (!alias) return value;
+  visited.add(name);
+  return colorValue(tokens, alias[1], visited);
+}
+
+function luminance(hsl: string) {
+  const match = hsl.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/);
   assert.ok(match, `Expected an HSL color token, got ${hsl}`);
   const [hue, saturation, lightness] = [Number(match[1]), Number(match[2]) / 100, Number(match[3]) / 100];
   const amplitude = saturation * Math.min(lightness, 1 - lightness);
@@ -35,13 +45,15 @@ const surfaces = ["--background", "--card", "--muted"];
 const pairs = [
   ...foregrounds.flatMap(foreground => surfaces.map(surface => [foreground, surface])),
   ["--menu-accent-foreground", "--menu-accent"],
+  ["--foreground", "--menu-speech"],
+  ["--secondary-foreground", "--muted"],
 ];
 
 for (const [theme, tokens] of [["light", light], ["dark", dark]] as const) {
   for (const [foreground, surface] of pairs) {
     test(`${theme} ${foreground} on ${surface} meets 4.5:1 contrast`, () => {
-      const text = luminance(tokens.get(foreground));
-      const background = luminance(tokens.get(surface));
+      const text = luminance(colorValue(tokens, foreground));
+      const background = luminance(colorValue(tokens, surface));
       const ratio = (Math.max(text, background) + 0.05) / (Math.min(text, background) + 0.05);
       assert.ok(ratio >= 4.5, `Measured contrast is ${ratio.toFixed(2)}:1`);
     });
