@@ -1,7 +1,7 @@
 "use client"
 
 import { DayMenu } from "@/types/menu"
-import { Language, getAdditionalDays } from "@/services/menuService"
+import { Language, getAdditionalDays, pickDefaultDate } from "@/services/menuService"
 import { format, parse } from "date-fns"
 import { ko, enUS, zhCN, sv } from "date-fns/locale"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs"
@@ -35,13 +35,13 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
   ref
 ) {
   const [days, setDays] = useState<DayMenu[]>(initialDays)
-  const [selectedDate, setSelectedDate] = useState<string>(today)
+  const [selectedDate, setSelectedDate] = useState<string>(() => pickDefaultDate(initialDays, today))
   const [isLoadingLeft, setIsLoadingLeft] = useState(false)
   const [isLoadingRight, setIsLoadingRight] = useState(false)
   const tabsListRef = useRef<HTMLDivElement>(null)
 
-  // Find the index of today in the current days array
-  const todayIndex = days.findIndex(d => d.date === today)
+  // The tab to bring into view on load: today on a normal day, the default date otherwise
+  const focusIndex = days.findIndex(d => d.date === selectedDate)
   
   // Track if initial scroll has happened
   const hasInitialScrolled = useRef(false)
@@ -49,12 +49,14 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
   // Expose goToToday method via ref
   useImperativeHandle(ref, () => ({
     goToToday: () => {
-      setSelectedDate(today)
-      // Scroll to today tab
-      if (tabsListRef.current && todayIndex >= 0) {
+      // On weekends and holidays there is no menu today: go to the nearest day that has one
+      const target = pickDefaultDate(days, today)
+      const targetIndex = days.findIndex(d => d.date === target)
+      setSelectedDate(target)
+      if (tabsListRef.current && targetIndex >= 0) {
         const container = tabsListRef.current
         const tabs = container.querySelectorAll('[role="tab"]')
-        const todayTab = tabs[todayIndex] as HTMLElement
+        const todayTab = tabs[targetIndex] as HTMLElement
         
         if (todayTab) {
           todayTab.scrollIntoView({
@@ -65,20 +67,13 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
         }
       }
     }
-  }), [today, todayIndex])
+  }), [today, days])
 
   // Update days when initialDays change (language change)
   useEffect(() => {
     setDays(initialDays)
-    // Reset selected date to today if available
-    const todayExists = initialDays.some(d => d.date === today)
-    if (todayExists) {
-      setSelectedDate(today)
-    } else if (initialDays.length > 0) {
-      // Find the middle day
-      const middleIndex = Math.floor(initialDays.length / 2)
-      setSelectedDate(initialDays[middleIndex].date)
-    }
+    // Reset to today, or to the nearest day with a menu on weekends and holidays
+    setSelectedDate(pickDefaultDate(initialDays, today))
     // Reset scroll flag when language changes
     hasInitialScrolled.current = false
   }, [initialDays, today])
@@ -131,9 +126,9 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     }
   }, [days, language, isLoadingRight])
 
-  // Scroll to center on today only on initial mount or language change
+  // Scroll to center on the selected tab only on initial mount or language change
   useEffect(() => {
-    if (tabsListRef.current && todayIndex >= 0 && !hasInitialScrolled.current) {
+    if (tabsListRef.current && focusIndex >= 0 && !hasInitialScrolled.current) {
       // Wait for layout to be fully calculated
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -141,11 +136,11 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
           if (!container) return
           
           const tabs = container.querySelectorAll('[role="tab"]')
-          const todayTab = tabs[todayIndex] as HTMLElement
+          const focusTab = tabs[focusIndex] as HTMLElement
           
-          if (todayTab) {
+          if (focusTab) {
             // Use scrollIntoView for more accurate centering
-            todayTab.scrollIntoView({
+            focusTab.scrollIntoView({
               behavior: 'smooth',
               block: 'nearest',
               inline: 'center'
@@ -156,7 +151,7 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
         })
       })
     }
-  }, [todayIndex, days])
+  }, [focusIndex, days])
 
   const selectedMenu = days.find(d => d.date === selectedDate)
 
