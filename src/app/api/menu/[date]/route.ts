@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const API_URL = 'https://menu.api.sungwoonsong.com';
+const API_URL = 'https://gasan-menu-api.andrew960811.workers.dev';
 
 // Server-side in-memory cache
 interface ServerCacheEntry {
