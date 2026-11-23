@@ -16,6 +16,7 @@ const sizes = { mobile: { width: 390, height: 844 }, desktop: { width: 1280, hei
 type Size = keyof typeof sizes;
 const languages = Object.keys(LANGUAGES) as Language[];
 const themes = ["light", "dark"] as const;
+const hotPenguinSelector = 'img[src*="spicy.png"]';
 
 async function setup(
   browser: Browser, size: Size,
@@ -46,6 +47,55 @@ async function screenshot(page: Page, name: string, info: TestInfo, fullPage = f
 async function expectPenguin(image: Locator, filename: string) {
   await expect(image).toHaveAttribute("src", new RegExp(`${filename}\\.png`));
   await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+}
+
+async function expectHotPenguinSpeech(card: Locator, language: Language) {
+  const penguin = card.locator(hotPenguinSelector);
+  await expect(penguin).toHaveCount(1);
+  await penguin.scrollIntoViewIfNeeded();
+  await expectPenguin(penguin, "spicy");
+  const group = penguin.locator("..");
+  await expect(group).toHaveAttribute("aria-hidden", "true");
+  const speech = group.getByText(menuCopy[language].spicySpeech, { exact: true });
+  await expect(speech).toHaveCSS("font-size", "11px");
+  await expect(speech).toHaveCSS("font-weight", "600");
+  const tail = await speech.evaluate(element => {
+    const style = getComputedStyle(element, "::before");
+    return { content: style.content, right: parseFloat(style.right), width: parseFloat(style.width) };
+  });
+  expect(tail.content).toBe('""');
+  expect(tail.right).toBeLessThan(0);
+
+  const bounds = (await card.boundingBox())!;
+  const image = (await penguin.boundingBox())!;
+  const bubble = (await speech.boundingBox())!;
+  const title = (await card.getByRole("heading", { level: 4 }).boundingBox())!;
+  const rightInset = bounds.x + bounds.width - image.x - image.width;
+  expect(image.width).toBe(40);
+  expect(image.height).toBe(40);
+  expect(bubble.height).toBe(22);
+  expect(bubble.y + bubble.height / 2).toBeCloseTo(image.y + image.height / 2, 0);
+  const tailEnd = bubble.x + bubble.width - tail.right + tail.width * (Math.SQRT2 - 1) / 2;
+  expect(tailEnd).toBeLessThanOrEqual(image.x);
+  expect(rightInset).toBeGreaterThan(0);
+  expect(rightInset).toBeLessThanOrEqual(21);
+  expect(image.y).toBeGreaterThan(bounds.y);
+  expect(Math.max(image.y + image.height, bubble.y + bubble.height)).toBeLessThanOrEqual(title.y);
+
+  const row = group.locator("..");
+  const original = row.locator(':scope > span[lang="ko"]');
+  const badge = row.locator(':scope > span:not([lang])');
+  for (const label of [badge, original]) {
+    if (await label.count()) {
+      const box = (await label.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(bubble.x);
+      await expect(label).toBeVisible();
+      expect(await label.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
+        await label.evaluate(element => element.clientWidth),
+      );
+    }
+  }
+  return { badge, original };
 }
 
 async function expectErrorArtwork(image: Locator) {
@@ -205,7 +255,11 @@ for (const { size, language, theme } of liveLayouts) {
       const copy = menuCopy[language];
       const lunch = page.getByRole("region", { name: copy.lunch, exact: true });
       const dinner = page.getByRole("region", { name: copy.dinner, exact: true });
-      await expectPenguin(lunch.locator('article img[src*="spicy.png"]').first(), "spicy");
+      const hotDishes = lunch.locator("article").filter({ has: page.locator(hotPenguinSelector) });
+      await expect(hotDishes.first()).toBeVisible();
+      for (const dish of await hotDishes.all()) {
+        await expectHotPenguinSpeech(dish, language);
+      }
       await expect(lunch.getByRole("heading", { level: 4 })).toHaveText([
         ...(await lunch.locator("article h4").allTextContents()), copy.salad, copy.selfService,
       ]);
@@ -516,12 +570,13 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
   }
 });
 
-for (const size of Object.keys(sizes) as Size[]) {
+for (const width of [375, 390, 430, 1280]) {
   for (const language of languages) {
     for (const theme of themes) {
-      test(`fits the hot penguin inside the upper-right corner on ${size} in ${language} and ${theme} mode`, async ({ browser }) => {
-        const { page, context } = await setup(browser, size, { language, dark: theme === "dark" });
-        const hotDish = { ...mainDish, original_name: "매운버섯전골".repeat(8), info: { spice: 3 as const } };
+      test(`fits the hot penguin and speech bubble at ${width}px in ${language} and ${theme} mode`, async ({ browser }) => {
+        const size = width === sizes.desktop.width ? "desktop" : "mobile";
+        const { page, context } = await setup(browser, size, { width, language, dark: theme === "dark" });
+        const hotDish = { ...mainDish, original_name: "청양풍해물볶음우동&유부초밥세트", info: { spice: 3 as const } };
         const cornerlessDish = { ...hotDish, id: 2, name: "Hot noodles", corner_name: "", original_name: undefined };
         try {
           await fixtureMenu(page);
@@ -533,37 +588,22 @@ for (const size of Object.keys(sizes) as Size[]) {
           for (const dish of [hotDish, cornerlessDish]) {
             const heading = page.getByRole("heading", { name: dish.name, exact: true });
             const card = page.getByRole("article").filter({ has: heading });
-            const penguin = card.locator('img[src*="spicy.png"]');
-            await expect(penguin).toHaveCount(1);
-            await penguin.scrollIntoViewIfNeeded();
-            await expectPenguin(penguin, "spicy");
-            const bounds = (await card.boundingBox())!;
-            const image = (await penguin.boundingBox())!;
-            const title = (await heading.boundingBox())!;
-            const rightInset = bounds.x + bounds.width - image.x - image.width;
-            expect(image.width).toBe(44);
-            expect(image.height).toBe(44);
-            expect(rightInset).toBeGreaterThan(0);
-            expect(rightInset).toBeLessThanOrEqual(21);
-            expect(image.y).toBeGreaterThan(bounds.y);
-            expect(image.y + image.height).toBeLessThanOrEqual(title.y);
+            const { badge, original } = await expectHotPenguinSpeech(card, language);
 
             if (dish.corner_name) {
-              const badge = (await card.getByText(cornerLabel(dish.corner_name, language), { exact: true }).boundingBox())!;
-              expect(image.y + image.height / 2).toBeCloseTo(badge.y + badge.height / 2, 0);
+              await expect(badge).toHaveText(cornerLabel(dish.corner_name, language));
             }
-            const original = card.locator('[lang="ko"]');
             if (language !== "ko" && dish.original_name) {
               await expect(original).toHaveText(dish.original_name);
               const name = (await original.boundingBox())!;
-              expect(name.x + name.width).toBeLessThan(image.x);
-              expect(name.y + name.height / 2).toBeCloseTo(image.y + image.height / 2, 0);
-              if (size === "mobile") expect(name.height).toBeGreaterThan(16);
+              const corner = (await badge.boundingBox())!;
+              expect(corner.x + corner.width).toBeLessThan(name.x);
+              if (width === 375) expect(name.height).toBeGreaterThan(16);
             } else {
               await expect(original).toHaveCount(0);
             }
           }
-          await expectViewportWidth(page, sizes[size].width);
+          await expectViewportWidth(page, width);
         } finally {
           await context.close();
         }

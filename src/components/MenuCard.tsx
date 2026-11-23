@@ -34,8 +34,12 @@ function DishCard({ item, language }: { item: MenuItem; language: Language }) {
             {cornerLabel(item.corner_name, language)}
           </span>}
           {originalName && <span lang="ko" className={`ml-auto text-right text-xs text-muted-foreground ${isHot ? "min-w-0 break-words" : ""}`}>{originalName}</span>}
-          {isHot && <Image src={PENGUIN.spicy} alt="" aria-hidden="true" width={44} height={44}
-            className={`-my-2.5 shrink-0 ${originalName ? "" : "ml-auto"}`} />}
+          {isHot && (
+            <div aria-hidden="true" className={`-my-2 flex shrink-0 items-center gap-1.5 ${originalName ? "" : "ml-auto"}`}>
+              <span className="menu-speech menu-speech-right shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold leading-[14px] text-foreground">{copy.spicySpeech}</span>
+              <Image src={PENGUIN.spicy} alt="" width={40} height={40} className="shrink-0" />
+            </div>
+          )}
         </div>
       )}
       <div className="space-y-1.5">
