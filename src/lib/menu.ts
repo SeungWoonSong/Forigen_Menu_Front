@@ -1,14 +1,12 @@
-import { addDays, format, isWeekend, parse } from "date-fns";
+import { addDays, format, isWeekend, parse, startOfWeek } from "date-fns";
 import { enUS, ko, sv, zhCN } from "date-fns/locale";
 import { formatInTimeZone } from "date-fns-tz";
 import type { DayMenu, Language, MenuItem, SideItem } from "../types/menu";
-import { menuCopy } from "./menu-copy";
 
 export const PENGUIN = {
   mascot: "/mascot.png",
   welcome: "/SayHi.png",
   loading: "/Loading.png",
-  closed: "/SayHi.png",
   unpublished: "/mascot.png",
   empty: "/NoMenu.png",
   error: "/penguin/error.png",
@@ -34,7 +32,7 @@ export function selectLanguage(saved: string | null, browserLanguages: readonly 
 
 const locales = { ko, en: enUS, zh: zhCN, sv };
 const longDate = { ko: "M월 d일 (EEEE)", en: "EEEE, MMMM d", zh: "M月d日 EEEE", sv: "EEEE d MMMM" };
-const shortDate = { ko: "M/d (EEE)", en: "M/d EEE", zh: "M/d EEE", sv: "d/M EEE" };
+const fullDate = { ko: "yyyy년 M월 d일 (EEEE)", en: "EEEE, MMMM d, yyyy", zh: "yyyy年M月d日 EEEE", sv: "EEEE d MMMM yyyy" };
 const KST = "Asia/Seoul";
 
 export function dateInKorea(now: Date) {
@@ -47,43 +45,23 @@ export function timeInKorea(now: Date) {
 
 const parseDay = (date: string) => parse(date, "yyyyMMdd", new Date(2000, 0, 1));
 
-export function dateLabel(date: string, language: Language, short = false) {
-  return format(parseDay(date), (short ? shortDate : longDate)[language], { locale: locales[language] });
+export function dateLabel(date: string, language: Language, includeYear = false) {
+  return format(parseDay(date), (includeYear ? fullDate : longDate)[language], { locale: locales[language] });
 }
 
-export function dateTabLabel(date: string, language: Language, today: string, tomorrow: string) {
-  const copy = menuCopy[language];
-  const relative = date === today ? copy.today : date === tomorrow ? copy.tomorrow : undefined;
-  if (!relative) return dateLabel(date, language, true);
-  const numericDate = format(parseDay(date), language === "sv" ? "d/M" : "M/d");
-  return `${relative} ${numericDate}`;
+export function dateTabLabel(date: string, language: Language) {
+  return format(parseDay(date), "EEE d", { locale: locales[language] });
 }
 
-export function shiftDay(date: string, offset: number) {
-  return format(addDays(parseDay(date), offset), "yyyyMMdd");
-}
-
-export function isClosedDay(date: string) {
-  return isWeekend(parseDay(date));
-}
-
-export function nextBusinessDay(date: string) {
-  let next = shiftDay(date, 1);
-  while (isClosedDay(next)) next = shiftDay(next, 1);
-  return next;
+export function menuWeekDates(date: string, weekOffset = 0) {
+  const monday = startOfWeek(parseDay(date), { weekStartsOn: 1 });
+  return Array.from({ length: 5 }, (_, weekday) =>
+    format(addDays(monday, weekOffset * 7 + weekday), "yyyyMMdd"),
+  );
 }
 
 export function initialMenuDates(today: string) {
-  const center = isClosedDay(today) ? nextBusinessDay(today) : today;
-  let start = center;
-  let end = center;
-  for (let i = 0; i < 2; i++) {
-    do { start = shiftDay(start, -1); } while (isClosedDay(start));
-    end = nextBusinessDay(end);
-  }
-  const dates: string[] = [];
-  for (let date = start; date <= end; date = shiftDay(date, 1)) dates.push(date);
-  return dates;
+  return menuWeekDates(today, isWeekend(parseDay(today)) ? 1 : 0);
 }
 
 export type MenuRequest = { status: "ready"; menu: DayMenu } | { status: "error" };
@@ -94,7 +72,6 @@ export function hasMenu(menu: DayMenu) {
 }
 
 export function menuState(date: string, today: string, result?: MenuRequest) {
-  if (isClosedDay(date)) return "closed";
   if (!result) return "loading";
   if (result.status === "error") return "error";
   if (hasMenu(result.menu)) return "menu";
@@ -102,14 +79,11 @@ export function menuState(date: string, today: string, result?: MenuRequest) {
 }
 
 export function pickDefaultDate(dates: string[], today: string, results: MenuRequests) {
-  const state = menuState(today, today, results[today]);
-  if (state === "menu" || state === "error" || state === "loading") return today;
-  const latestMenu = [...dates].reverse().find(date => date < today && menuState(date, today, results[date]) === "menu");
-  if (state === "closed") {
-    const next = nextBusinessDay(today);
-    return menuState(next, today, results[next]) === "unpublished" ? latestMenu ?? next : next;
-  }
+  // On weekends the initial week starts on the next Monday.
+  if (!dates.includes(today)) return dates[0];
+  if (menuState(today, today, results[today]) !== "empty") return today;
   const upcoming = dates.find(date => date > today && menuState(date, today, results[date]) === "menu");
+  const latestMenu = [...dates].reverse().find(date => date < today && menuState(date, today, results[date]) === "menu");
   return upcoming ?? latestMenu ?? today;
 }
 

@@ -27,7 +27,6 @@
     --menu-accent: 22 52% 88%;
     --menu-accent-foreground: 19 66% 24%;
     --menu-speech: 32 44% 91%;
-    --menu-available: 150 25% 40%;
   }
 
   .dark {
@@ -42,7 +41,6 @@
     --menu-accent: 24 48% 24%;
     --menu-accent-foreground: 30 90% 88%;
     --menu-speech: 28 23% 19%;
-    --menu-available: 150 25% 60%;
   }
 }
 
@@ -69,26 +67,6 @@
   transform: translateY(-50%) rotate(45deg);
 }
 
-.menu-date-strip::before,
-.menu-date-strip::after {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  width: 0.625rem;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.menu-date-strip::before {
-  left: 0;
-  background: linear-gradient(to right, hsl(var(--card)), hsl(var(--card) / 0));
-}
-
-.menu-date-strip::after {
-  right: 0;
-  background: linear-gradient(to left, hsl(var(--card)), hsl(var(--card) / 0));
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .menu-side-sheet[data-state="open"] {
     animation: menu-sheet-enter 180ms ease-out;
@@ -107,16 +85,5 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
-
-/* Custom scrollbar */
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
   }
 }

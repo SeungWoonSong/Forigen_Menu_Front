@@ -2,14 +2,13 @@ import { expect, test } from "@playwright/test";
 import type { Browser, Locator, Page, TestInfo } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { cornerLabel, dateLabel, LANGUAGES } from "../src/lib/menu";
+import { cornerLabel, dateLabel, dateTabLabel, LANGUAGES } from "../src/lib/menu";
 import { menuCopy } from "../src/lib/menu-copy";
 import type { Language } from "../src/types/menu";
 import { emptyMenu, koreanDish, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
 
 const monday = "20261123";
 const tuesday = "20261124";
-const sunday = "20261122";
 const wednesday = "20261125";
 const morning = "2026-11-23T01:00:00Z";
 const sizes = { mobile: { width: 390, height: 844 }, desktop: { width: 1280, height: 900 } };
@@ -122,17 +121,8 @@ async function expectErrorArtwork(image: Locator) {
 }
 
 function tab(page: Page, date: string, language: Language = "en") {
-  const numeric = dateLabel(date, language, true).split(" ")[0];
-  return page.getByRole("tab", { name: new RegExp(`\\b${numeric}\\b`) });
-}
-
-async function expectTabsInStrip(page: Page, ...tabs: Locator[]) {
-  const strip = (await page.getByRole("tablist").boundingBox())!;
-  for (const tab of tabs) {
-    const bounds = (await tab.boundingBox())!;
-    expect(bounds.x).toBeGreaterThanOrEqual(strip.x - 1);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(strip.x + strip.width + 1);
-  }
+  const fullDate = dateLabel(date, language, true).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return page.getByRole("tab", { name: new RegExp(`^${fullDate}(?: · |$)`) });
 }
 
 async function expectViewportWidth(page: Page, width: number) {
@@ -158,45 +148,65 @@ async function fixtureMenu(page: Page) {
 }
 
 const expectedTabLabels = {
-  ko: ["오늘 11/23", "내일 11/24", "11/25 (수)"],
-  en: ["Today 11/23", "Tomorrow 11/24", "11/25 Wed"],
-  zh: ["今天 11/23", "明天 11/24", "11/25 周三"],
-  sv: ["I dag 23/11", "I morgon 24/11", "25/11 ons"],
+  ko: ["월 23", "화 24", "수 25", "목 26", "금 27"],
+  en: ["Mon 23", "Tue 24", "Wed 25", "Thu 26", "Fri 27"],
+  zh: ["周一 23", "周二 24", "周三 25", "周四 26", "周五 27"],
+  sv: ["mån 23", "tis 24", "ons 25", "tors 26", "fre 27"],
 };
 
-for (const width of [390, 375, 430]) {
+async function expectTodayMarker(today: Locator) {
+  await expect(today).toHaveAttribute("aria-current", "date");
+  await expect(today).toHaveCSS("font-weight", "700");
+  const marker = await today.locator("span").evaluate(element => {
+    const style = getComputedStyle(element, "::after");
+    return { content: style.content, width: style.width, color: style.backgroundColor, textColor: getComputedStyle(element).color };
+  });
+  expect(marker.content).toBe("\"\"");
+  expect(marker.width).toBe("12px");
+  expect(marker.color).toBe(marker.textColor);
+}
+
+for (const width of [375, 390, 430, 1280]) {
   for (const language of languages) {
     for (const theme of themes) {
-      test(`date strip fits ${width}px in ${language} and ${theme} mode`, async ({ browser }) => {
-        const { page, context } = await setup(browser, "mobile", { width, language, dark: theme === "dark" });
+      test(`fits one row of five weekdays at ${width}px in ${language} and ${theme} mode`, async ({ browser }) => {
+        const size = width === sizes.desktop.width ? "desktop" : "mobile";
+        const { page, context } = await setup(browser, size, { width, language, dark: theme === "dark" });
         try {
-          await page.route(menuRoute, route => {
-            const date = new URL(route.request().url()).pathname.split("/").pop()!;
-            return route.fulfill({ json: richMenu(date, language) });
-          });
+          await fixtureMenu(page);
           await page.goto("/");
-          const [today, tomorrow, later] = [monday, tuesday, wednesday].map(date => tab(page, date, language));
-          for (const [index, button] of [today, tomorrow, later].entries()) {
-            await expect(button).toHaveAccessibleName(`${expectedTabLabels[language][index]} ${menuCopy[language].available}`);
-          }
-          const dateStrip = page.getByRole("tablist");
-          expect(await dateStrip.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
-          for (const button of await dateStrip.getByRole("tab").all()) {
-            const layout = await button.evaluate(element => {
-              const range = document.createRange();
-              range.selectNodeContents(element.firstElementChild!);
-              return { lines: range.getClientRects().length, height: element.getBoundingClientRect().height };
-            });
-            expect(layout).toEqual({ lines: 1, height: 28 });
-          }
+          await page.evaluate(() => document.fonts.ready);
+          const strip = page.getByRole("tablist");
+          const tabs = strip.getByRole("tab");
+          await expect(tabs).toHaveText(expectedTabLabels[language]);
+          const today = tab(page, monday, language);
+          const tuesdayTab = tab(page, tuesday, language);
+          const copy = menuCopy[language];
+          await expect(today).toHaveAccessibleName(`${dateLabel(monday, language, true)} · ${copy.today} · ${copy.available}`);
+          await expect(tuesdayTab).toHaveAccessibleName(dateLabel(tuesday, language, true));
+          await expect(today).toHaveAttribute("aria-selected", "true");
           await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
           await expectViewportWidth(page, width);
-          await expectTabsInStrip(page, today, tomorrow);
-          await tomorrow.tap();
-          await expect(tomorrow).toHaveAttribute("aria-selected", "true");
+          const layout = await strip.evaluate(element => {
+            const cells = Array.from(element.querySelectorAll("button"), button => {
+              const range = document.createRange();
+              range.selectNodeContents(button.firstElementChild!);
+              const rect = button.getBoundingClientRect();
+              return { lines: range.getClientRects().length, height: rect.height, width: rect.width, top: rect.top };
+            });
+            return { overflow: element.scrollWidth - element.clientWidth, cells };
+          });
+          expect(layout.overflow).toBe(0);
+          const firstCell = layout.cells[0];
+          for (const cell of layout.cells) {
+            expect(cell).toMatchObject({ lines: 1, height: 28, top: firstCell.top });
+            expect(Math.abs(cell.width - firstCell.width)).toBeLessThanOrEqual(1);
+          }
+          await expectTodayMarker(today);
+          await tuesdayTab.click();
+          await expect(tuesdayTab).toHaveAttribute("aria-selected", "true");
           await expect(today).toHaveAttribute("aria-selected", "false");
-          await expect(today).toHaveAttribute("aria-current", "date");
-          await expect(today).toHaveCSS("font-weight", "700");
+          await expectTodayMarker(today);
           await expectViewportWidth(page, width);
         } finally {
           await context.close();
@@ -206,32 +216,11 @@ for (const width of [390, 375, 430]) {
   }
 }
 
-test("shows all seven date tabs without scrolling when they fit on desktop", async ({ browser }) => {
-  const { page, context } = await setup(browser, "desktop");
-  try {
-    await page.route(menuRoute, route => {
-      const date = new URL(route.request().url()).pathname.split("/").pop()!;
-      return route.fulfill({ json: richMenu(date) });
-    });
-    await page.goto("/");
-    await expect(tab(page, wednesday)).toHaveAccessibleName(`${expectedTabLabels.en[2]} ${menuCopy.en.available}`);
-    await page.evaluate(() => document.fonts.ready);
-    const strip = page.getByRole("tablist");
-    await expect(strip.getByRole("tab")).toHaveCount(7);
-    const { scrollWidth, clientWidth, scrollLeft } = await strip.evaluate(element => ({
-      scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, scrollLeft: element.scrollLeft,
-    }));
-    expect(scrollWidth).toBe(clientWidth);
-    expect(scrollLeft).toBe(0);
-  } finally {
-    await context.close();
-  }
-});
-
 const liveLayouts = [
   ...languages.flatMap(language => themes.map(theme => ({ size: "mobile" as const, language, theme }))),
   ...languages.map(language => ({ size: "desktop" as const, language, theme: "light" as const })),
   { size: "desktop", language: "en", theme: "dark" } as const,
+  { size: "desktop", language: "ko", theme: "dark" } as const,
 ];
 
 for (const { size, language, theme } of liveLayouts) {
@@ -241,9 +230,8 @@ for (const { size, language, theme } of liveLayouts) {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: dateLabel(monday, language) })).toBeVisible();
       await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
-      await expect(tab(page, monday, language)).toContainText(menuCopy[language].today);
-      await expect(tab(page, monday, language)).toContainText(menuCopy[language].available);
-      await expect(tab(page, tuesday, language)).toContainText(menuCopy[language].tomorrow);
+      await expectTodayMarker(tab(page, monday, language));
+      await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels[language]);
       await expect(page.getByRole("button", { name: LANGUAGES[language].name })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByRole("heading", { name: menuCopy[language].lunch, exact: true })).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("lang", language);
@@ -285,7 +273,7 @@ for (const size of Object.keys(sizes) as Size[]) {
     const { page, context } = await setup(browser, size);
     try {
       await page.goto("/");
-      await expect(tab(page, tuesday)).toContainText(menuCopy.en.available);
+      await expect(tab(page, tuesday)).toHaveAccessibleName(`${dateLabel(tuesday, "en", true)} · ${menuCopy.en.available}`);
       await tab(page, tuesday).click();
       const lunch = page.getByRole("region", { name: menuCopy.en.lunch, exact: true });
       const bar = lunch.locator("section").filter({ has: page.getByRole("heading", { name: "Self-service bar" }) });
@@ -303,44 +291,88 @@ for (const size of Object.keys(sizes) as Size[]) {
   });
 }
 
-test("@live Sunday evening opens Monday with lunch first and has a separate closed day panel", async ({ browser }, info) => {
+test("@live Sunday evening opens next Monday with lunch first and the weekend banner", async ({ browser }, info) => {
   const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
   try {
     await page.goto("/");
-    await expect(page.getByRole("complementary").filter({ hasText: menuCopy.en.closed })).toBeVisible();
+    await expect(page.getByRole("complementary")).toHaveText(
+      `${menuCopy.en.closed} · ${menuCopy.en.nextBusiness(dateTabLabel(monday, "en"))}`,
+    );
     await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("heading", { name: dateLabel(monday, "en") })).toBeVisible();
-    await expectTabsInStrip(page, tab(page, sunday), tab(page, monday));
+    await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels.en);
     await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
+    await expectViewportWidth(page, sizes.mobile.width);
     await screenshot(page, "11-22-weekend-first-view-mobile", info);
-    await tab(page, sunday).click();
-    await expect(page.getByRole("heading", { name: menuCopy.en.closed })).toBeVisible();
-    await screenshot(page, "11-22-closed-mobile", info);
-    await page.getByRole("button", { name: /Next business day/ }).click();
-    await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
   } finally {
     await context.close();
   }
 });
 
-test("opens Friday on a Sunday with an unpublished Monday and links to Monday", async ({ browser }, info) => {
-  const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
+for (const [day, now] of [["Saturday", "2026-11-21T11:00:00Z"], ["Sunday", "2026-11-22T11:00:00Z"]]) {
+  test(`opens next Monday on ${day} even when Monday is unpublished`, async ({ browser }) => {
+    const { page, context } = await setup(browser, "mobile", { now });
+    const requestedDates: string[] = [];
+    try {
+      await page.route(menuRoute, route => {
+        const date = new URL(route.request().url()).pathname.split("/").pop()!;
+        requestedDates.push(date);
+        return route.fulfill({ json: date === tuesday ? richMenu(date) : emptyMenu(date) });
+      });
+      await page.goto("/");
+      const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
+      const businessDay = menuCopy.en.nextBusiness(dateTabLabel(monday, "en"));
+      await expect(banner).toHaveText(`${menuCopy.en.closed} · ${businessDay}`);
+      await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels.en);
+      await expect(page.locator('[aria-current="date"]')).toHaveCount(0);
+      await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
+      expect(requestedDates.sort()).toEqual(["20261123", "20261124", "20261125", "20261126", "20261127"]);
+      await page.getByRole("button", { name: menuCopy.en.earlier }).click();
+      await expect(tab(page, "20261116")).toHaveAttribute("aria-selected", "true");
+      await banner.getByRole("button", { name: businessDay }).click();
+      await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("week arrows replace the five menu dates and select Monday or today", async ({ browser }) => {
+  const { page, context } = await setup(browser, "mobile", { now: "2026-11-25T01:00:00Z" });
+  const requestedDates: string[] = [];
   try {
     await page.route(menuRoute, route => {
       const date = new URL(route.request().url()).pathname.split("/").pop()!;
-      return route.fulfill({ json: date === "20261120" || date === tuesday ? richMenu(date) : emptyMenu(date) });
+      requestedDates.push(date);
+      return route.fulfill({ json: richMenu(date) });
     });
     await page.goto("/");
-    const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
-    const nextDay = banner.getByRole("button", { name: menuCopy.en.nextBusiness(dateLabel(monday, "en")) });
-    await expect(nextDay).toBeVisible();
-    await expect(tab(page, "20261120")).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
-    await expectTabsInStrip(page, tab(page, sunday), tab(page, "20261120"));
-    await screenshot(page, "weekend-unpublished-fallback-mobile", info);
-    await nextDay.click();
-    await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
+    const tabs = page.getByRole("tablist").getByRole("tab");
+    await expect(tabs).toHaveText(expectedTabLabels.en);
+    await expect(tab(page, wednesday)).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { name: dateLabel(wednesday, "en") })).toBeVisible();
+    expect(requestedDates.splice(0).sort()).toEqual(["20261123", "20261124", "20261125", "20261126", "20261127"]);
+
+    const next = page.getByRole("button", { name: menuCopy.en.later });
+    const previous = page.getByRole("button", { name: menuCopy.en.earlier });
+    await next.click();
+    await expect(tabs).toHaveText(["Mon 30", "Tue 1", "Wed 2", "Thu 3", "Fri 4"]);
+    await expect(tab(page, "20261130")).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => [...requestedDates].sort()).toEqual(["20261130", "20261201", "20261202", "20261203", "20261204"]);
+    requestedDates.length = 0;
+
+    await previous.click();
+    await expect(tabs).toHaveText(expectedTabLabels.en);
+    await expect(tab(page, wednesday)).toHaveAttribute("aria-selected", "true");
+    await previous.click();
+    await expect(tabs).toHaveText(["Mon 16", "Tue 17", "Wed 18", "Thu 19", "Fri 20"]);
+    await expect(tab(page, "20261116")).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => [...requestedDates].sort()).toEqual(["20261116", "20261117", "20261118", "20261119", "20261120"]);
+
+    await page.getByRole("button", { name: "Gasan Menu · Today" }).click();
+    await expect(tabs).toHaveText(expectedTabLabels.en);
+    await expect(tab(page, wednesday)).toHaveAttribute("aria-selected", "true");
   } finally {
     await context.close();
   }
@@ -358,23 +390,29 @@ test("shows today beside the next menu when today's menu is empty", async ({ bro
     const nextMenu = tab(page, tuesday);
     await expect(nextMenu).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("heading", { name: dateLabel(tuesday, "en") })).toBeVisible();
-    await expectTabsInStrip(page, today, nextMenu);
+    await expect(today).toBeInViewport();
     await expectViewportWidth(page, sizes.mobile.width);
   } finally {
     await context.close();
   }
 });
 
-test("distinguishes a future weekday from a confirmed past empty menu", async ({ browser }, info) => {
-  const { page, context } = await setup(browser, "mobile");
+test("mutes a confirmed empty weekday and keeps future unpublished menus distinct", async ({ browser }, info) => {
+  const { page, context } = await setup(browser, "mobile", { now: "2026-11-25T01:00:00Z" });
   try {
     await fixtureMenu(page);
     await page.goto("/");
     await expect(page.getByRole("heading", { name: mainDish.name })).toBeVisible();
-    await tab(page, tuesday).click();
+    await tab(page, "20261126").click();
     await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
     await screenshot(page, "future-unpublished-mobile", info);
-    await tab(page, "20261120").click();
+    const holiday = tab(page, tuesday);
+    await expect(holiday).toHaveAccessibleName(`${dateLabel(tuesday, "en", true)} · ${menuCopy.en.noMenu}`);
+    await expect(holiday).toHaveClass(/\btext-muted-foreground\b/);
+    await expect(holiday).toBeEnabled();
+    expect(await holiday.evaluate(element => getComputedStyle(element).color))
+      .not.toBe(await tab(page, monday).evaluate(element => getComputedStyle(element).color));
+    await holiday.click();
     await expect(page.getByRole("heading", { name: menuCopy.en.empty })).toBeVisible();
     await screenshot(page, "past-empty-mobile", info);
   } finally {
