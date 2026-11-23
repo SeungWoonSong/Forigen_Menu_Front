@@ -7,13 +7,13 @@ import { menuCopy } from "../lib/menu-copy";
 import { DietaryTags } from "./DietaryTags";
 import { SideChips } from "./SideChips";
 
-function PenguinTip({ image, label, text }: { image: string; label: string; text?: string }) {
+function PenguinTip({ image, label, text }: { image: string; label: string; text: string }) {
   return (
     <div className="flex items-start gap-2">
       <Image src={image} alt="" width={40} height={40} className="shrink-0" />
       <p className="menu-speech min-w-0 rounded-xl px-3 py-2 text-sm leading-relaxed">
         <span className="font-semibold">{label}</span>
-        {text && <>{" · "}<span>{text}</span></>}
+        {" · "}<span>{text}</span>
       </p>
     </div>
   );
@@ -24,15 +24,18 @@ function DishCard({ item, language }: { item: MenuItem; language: Language }) {
   const { info } = item;
   const detail = info?.detail || item.description;
   const originalName = displayOriginalName(item, language);
+  const isHot = info?.spice === 3;
 
   return (
     <article className="min-w-0 space-y-3 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-      {(item.corner_name || originalName) && (
-        <div className="flex items-baseline justify-between gap-3">
+      {(item.corner_name || originalName || isHot) && (
+        <div className={`flex justify-between gap-3 ${isHot ? "items-center" : "items-baseline"}`}>
           {item.corner_name && <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
             {cornerLabel(item.corner_name, language)}
           </span>}
-          {originalName && <span lang="ko" className="ml-auto text-right text-xs text-muted-foreground">{originalName}</span>}
+          {originalName && <span lang="ko" className={`ml-auto text-right text-xs text-muted-foreground ${isHot ? "min-w-0 break-words" : ""}`}>{originalName}</span>}
+          {isHot && <Image src={PENGUIN.spicy} alt="" aria-hidden="true" width={44} height={44}
+            className={`-my-2.5 shrink-0 ${originalName ? "" : "ml-auto"}`} />}
         </div>
       )}
       <div className="space-y-1.5">
@@ -41,11 +44,9 @@ function DishCard({ item, language }: { item: MenuItem; language: Language }) {
         {detail && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground sm:text-base">{detail}</p>}
       </div>
       <DietaryTags info={info} language={language} />
-      {(info?.similar_to || info?.how_to_eat || info?.spice === 3) && (
+      {(info?.similar_to || info?.how_to_eat) && (
         <aside className="space-y-2">
-          {info.similar_to
-            ? <PenguinTip image={info.spice === 3 ? PENGUIN.spicy : PENGUIN.mascot} label={copy.similar} text={info.similar_to} />
-            : info.spice === 3 && <PenguinTip image={PENGUIN.spicy} label={copy.spice[3]} />}
+          {info.similar_to && <PenguinTip image={PENGUIN.mascot} label={copy.similar} text={info.similar_to} />}
           {info.how_to_eat && <PenguinTip image={PENGUIN.howtoeat} label={copy.howToEat} text={info.how_to_eat} />}
         </aside>
       )}
