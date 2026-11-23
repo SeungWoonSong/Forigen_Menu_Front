@@ -7,7 +7,8 @@ import { menuCopy } from "../src/lib/menu-copy";
 import type { Language, MenuInfo } from "../src/types/menu";
 import { emptyMenu, mainDish } from "./menu-fixtures";
 
-const languages = Object.keys(menuCopy) as Language[];
+const spicySpeech = { ko: "앗 매워!", en: "So spicy!", zh: "好辣！", sv: "Oj, starkt!" };
+const languages = Object.keys(spicySpeech) as Language[];
 const spicyPenguin = /<img\b[^>]*%2Fpenguin%2Fspicy\.png[^>]*>/;
 
 function renderDish(info: MenuInfo, language: Language = "en") {
@@ -17,7 +18,7 @@ function renderDish(info: MenuInfo, language: Language = "en") {
 }
 
 for (const language of languages) {
-  test(`renders the ${language} hot caption with the decorative penguin in the first row`, () => {
+  test(`renders the ${language} speech bubble with the decorative hot penguin`, () => {
     const card = renderDish({ spice: 3 }, language);
     const images = [...card.matchAll(new RegExp(spicyPenguin, "g"))];
     assert.equal(images.length, 1);
@@ -25,21 +26,21 @@ for (const language of languages) {
     const firstRow = card.slice(0, card.indexOf("</div></div>"));
     const group = firstRow.match(/<div aria-hidden="true"[^>]*>([\s\S]*)$/)?.[1];
     assert.ok(group);
-    assert.ok(group.startsWith(image));
     assert.match(image, /\balt=""/);
-    const caption = `>${menuCopy[language].spice[3]}</span>`;
-    assert.ok(group.endsWith(caption));
-    assert.ok(card.slice(card.indexOf("<h4")).includes(caption));
+    assert.ok(group.endsWith(`>${spicySpeech[language]}</span>${image}`));
+    const spiceTag = `>${menuCopy[language].spice[3]}</span>`;
+    assert.equal(card.split(spiceTag).length, 2);
+    assert.ok(card.slice(card.indexOf("<h4")).includes(spiceTag));
     assert.doesNotMatch(card, /<aside\b/);
   });
 }
 
-test("omits the hot penguin and caption for spice levels zero through two", () => {
+test("omits the hot penguin and speech bubble for spice levels zero through two", () => {
   for (const language of languages) {
     for (const spice of [0, 1, 2] as const) {
       const card = renderDish({ spice }, language);
       assert.doesNotMatch(card, spicyPenguin);
-      assert.ok(!card.includes(`>${menuCopy[language].spice[3]}</span>`));
+      assert.ok(!card.includes(`>${spicySpeech[language]}</span>`));
     }
   }
 });

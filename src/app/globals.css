@@ -62,6 +62,13 @@
   background: inherit;
 }
 
+.menu-speech-right::before {
+  top: 50%;
+  right: -0.19rem;
+  left: auto;
+  transform: translateY(-50%) rotate(45deg);
+}
+
 .menu-date-strip::before,
 .menu-date-strip::after {
   content: "";

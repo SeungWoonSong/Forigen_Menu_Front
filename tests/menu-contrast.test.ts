@@ -40,15 +40,12 @@ function luminance(hsl: string) {
 
 const light = palette(":root");
 const dark = new Map([...light, ...palette(".dark")]);
-const foregrounds = ["--foreground", "--menu-accent-foreground"];
+const foregrounds = ["--foreground", "--muted-foreground", "--menu-accent-foreground"];
 const surfaces = ["--background", "--card", "--muted"];
 const pairs = [
   ...foregrounds.flatMap(foreground => surfaces.map(surface => [foreground, surface])),
-  ["--muted-foreground", "--card", "hot penguin caption"],
-  ["--muted-foreground", "--background"],
-  ["--muted-foreground", "--muted"],
   ["--menu-accent-foreground", "--menu-accent"],
-  ["--foreground", "--menu-speech"],
+  ["--foreground", "--menu-speech", "penguin speech bubbles (--foreground on --menu-speech)"],
   ["--secondary-foreground", "--muted"],
 ];
 
