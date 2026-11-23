@@ -295,7 +295,7 @@ test("@live Sunday evening opens next Monday with lunch first and the weekend ba
   const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
   try {
     await page.goto("/");
-    const banner = page.getByRole("complementary");
+    const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
     await expect(banner).toHaveText(
       `${menuCopy.en.closed} · ${menuCopy.en.nextBusiness(dateTabLabel(monday, "en"))}`,
     );
@@ -311,30 +311,37 @@ test("@live Sunday evening opens next Monday with lunch first and the weekend ba
   }
 });
 
-for (const [day, now] of [["Saturday", "2026-11-21T11:00:00Z"], ["Sunday", "2026-11-22T11:00:00Z"]]) {
-  test(`opens next Monday on ${day} even when Monday is unpublished`, async ({ browser }) => {
-    const { page, context } = await setup(browser, "mobile", { now, width: 375 });
+const weekendDays = [
+  { day: "Saturday", now: "2026-11-21T11:00:00Z" },
+  { day: "Sunday", now: "2026-11-22T11:00:00Z" },
+];
+
+for (const { day, now, language } of weekendDays.flatMap(day => languages.map(language => ({ ...day, language })))) {
+  test(`opens next Monday on ${day} in ${language} even when Monday is unpublished`, async ({ browser }) => {
+    const { page, context } = await setup(browser, "mobile", { now, language, width: 375 });
+    const copy = menuCopy[language];
     const requestedDates: string[] = [];
     try {
       await page.route(menuRoute, route => {
         const date = new URL(route.request().url()).pathname.split("/").pop()!;
         requestedDates.push(date);
-        return route.fulfill({ json: date === tuesday ? richMenu(date) : emptyMenu(date) });
+        return route.fulfill({ json: date === tuesday ? richMenu(date, language) : emptyMenu(date, language) });
       });
       await page.goto("/");
-      const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
-      const businessDay = menuCopy.en.nextBusiness(dateTabLabel(monday, "en"));
-      await expect(banner).toHaveText(`${menuCopy.en.closed} · ${businessDay}`);
+      const banner = page.getByRole("complementary").filter({ hasText: copy.closed });
+      const businessDay = copy.nextBusiness(dateTabLabel(monday, language));
+      await expect(banner).toHaveText(`${copy.closed} · ${businessDay}`);
+      await page.evaluate(() => document.fonts.ready);
       await expect(banner).toHaveCSS("height", "32px");
-      await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels.en);
+      await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels[language]);
       await expect(page.locator('[aria-current="date"]')).toHaveCount(0);
-      await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
+      await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: copy.unpublished })).toBeVisible();
       await expect.poll(() => [...requestedDates].sort()).toEqual(["20261123", "20261124", "20261125", "20261126", "20261127"]);
-      await page.getByRole("button", { name: menuCopy.en.earlier }).click();
-      await expect(tab(page, "20261116")).toHaveAttribute("aria-selected", "true");
+      await page.getByRole("button", { name: copy.earlier }).click();
+      await expect(tab(page, "20261116", language)).toHaveAttribute("aria-selected", "true");
       await banner.getByRole("button", { name: businessDay }).click();
-      await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
+      await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
     } finally {
       await context.close();
     }

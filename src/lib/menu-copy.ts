@@ -50,7 +50,7 @@ export const menuCopy = {
     today: "I dag", dates: "Menydatum", available: "Meny finns", noMenu: "Ingen meny",
     earlier: "Förra veckan", later: "Nästa vecka", lunch: "Lunch", dinner: "Middag",
     noMeal: "Ingen meny för den här måltiden", selfService: "Självservering", salad: "Sallad och hämtmat",
-    loading: "Laddar menyn", closed: "Restaurangen är stängd i dag",
+    loading: "Laddar menyn", closed: "Stängt i dag",
     unpublished: "Menyn har inte publicerats ännu", empty: "Det finns ingen meny för det här datumet",
     error: "Menyn kunde inte laddas", retry: "Försök igen",
     nextBusiness: (date: string) => `Nästa öppetdag ${date}`, updated: (time: string) => `Uppdaterad ${time}`,
