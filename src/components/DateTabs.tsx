@@ -3,7 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Language } from "../types/menu";
-import { dateLabel, dateTabLabel, initialMenuDates, menuState, menuWeekDates, pickDefaultDate } from "../lib/menu";
+import { businessDayLabel, dateLabel, dateTabLabel, initialMenuDates, menuState, menuWeekDates, pickDefaultDate } from "../lib/menu";
 import type { MenuRequest, MenuRequests } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import { cn } from "../lib/utils";
@@ -75,7 +75,7 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
     },
   }), [defaultDate, initialDates, initialReady]);
 
-  const businessLabel = copy.nextBusiness(dateTabLabel(upcomingBusinessDay, language));
+  const businessLabel = copy.nextBusiness(businessDayLabel(upcomingBusinessDay, language));
   function retry(date: string) {
     setSelection(date);
     setRequests(current => ({ ...current, [language]: { ...current[language], [date]: undefined } }));
@@ -90,7 +90,9 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
           {dates.map(date => {
             const isToday = date === today;
             const state = menuState(date, today, results[date]);
+            const visibleLabel = dateTabLabel(date, language);
             const label = [
+              visibleLabel,
               dateLabel(date, language, true),
               isToday && copy.today,
               state === "empty" && copy.noMenu,
@@ -103,7 +105,7 @@ export const DateTabs = forwardRef<DateTabsRef, DateTabsProps>(function DateTabs
                   state === "empty" ? "text-muted-foreground" : "text-foreground",
                 )}>
                 <span className={isToday ? "relative after:absolute after:bottom-0 after:right-0 after:h-px after:w-3 after:rounded-full after:bg-current" : undefined}>
-                  {dateTabLabel(date, language)}
+                  {visibleLabel}
                 </span>
               </TabsTrigger>
             );

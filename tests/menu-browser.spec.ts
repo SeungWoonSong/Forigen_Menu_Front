@@ -121,8 +121,8 @@ async function expectErrorArtwork(image: Locator) {
 }
 
 function tab(page: Page, date: string, language: Language = "en") {
-  const fullDate = dateLabel(date, language, true).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByRole("tab", { name: new RegExp(`^${fullDate}(?: · |$)`) });
+  const name = `${dateTabLabel(date, language)} · ${dateLabel(date, language, true)}`;
+  return page.getByRole("tab", { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?: · |$)`) });
 }
 
 async function expectViewportWidth(page: Page, width: number) {
@@ -182,8 +182,9 @@ for (const width of [375, 390, 430, 1280]) {
           const today = tab(page, monday, language);
           const tuesdayTab = tab(page, tuesday, language);
           const copy = menuCopy[language];
-          await expect(today).toHaveAccessibleName(`${dateLabel(monday, language, true)} · ${copy.today} · ${copy.available}`);
-          await expect(tuesdayTab).toHaveAccessibleName(dateLabel(tuesday, language, true));
+          const [mondayLabel, tuesdayLabel] = expectedTabLabels[language];
+          await expect(today).toHaveAccessibleName(`${mondayLabel} · ${dateLabel(monday, language, true)} · ${copy.today} · ${copy.available}`);
+          await expect(tuesdayTab).toHaveAccessibleName(`${tuesdayLabel} · ${dateLabel(tuesday, language, true)}`);
           await expect(today).toHaveAttribute("aria-selected", "true");
           await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
           await expectViewportWidth(page, width);
@@ -273,7 +274,7 @@ for (const size of Object.keys(sizes) as Size[]) {
     const { page, context } = await setup(browser, size);
     try {
       await page.goto("/");
-      await expect(tab(page, tuesday)).toHaveAccessibleName(`${dateLabel(tuesday, "en", true)} · ${menuCopy.en.available}`);
+      await expect(tab(page, tuesday)).toHaveAccessibleName(`Tue 24 · ${dateLabel(tuesday, "en", true)} · ${menuCopy.en.available}`);
       await tab(page, tuesday).click();
       const lunch = page.getByRole("region", { name: menuCopy.en.lunch, exact: true });
       const bar = lunch.locator("section").filter({ has: page.getByRole("heading", { name: "Self-service bar" }) });
@@ -291,25 +292,34 @@ for (const size of Object.keys(sizes) as Size[]) {
   });
 }
 
-test("@live Sunday evening opens next Monday with lunch first and the weekend banner", async ({ browser }, info) => {
-  const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
-  try {
-    await page.goto("/");
-    const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
-    await expect(banner).toHaveText(
-      `${menuCopy.en.closed} · ${menuCopy.en.nextBusiness(dateTabLabel(monday, "en"))}`,
-    );
-    await expect(banner).toHaveCSS("height", "32px");
-    await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("heading", { name: dateLabel(monday, "en") })).toBeVisible();
-    await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels.en);
-    await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(menuCopy.en.lunch);
-    await expectViewportWidth(page, sizes.mobile.width);
-    await screenshot(page, "11-22-weekend-first-view-mobile", info);
-  } finally {
-    await context.close();
-  }
-});
+const nextBusinessLabels = {
+  ko: "다음 영업일 11월 23일(월)",
+  en: "Next business day: Mon, Nov 23",
+  zh: "下一个营业日：11月23日 周一",
+  sv: "Nästa öppetdag: mån 23 nov",
+};
+
+for (const language of ["ko", "en"] as const) {
+  test(`@live Sunday evening in ${language} opens next Monday with lunch first and the weekend banner`, async ({ browser }, info) => {
+    const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z", language, width: 375 });
+    const copy = menuCopy[language];
+    try {
+      await page.goto("/");
+      const banner = page.getByRole("complementary").filter({ hasText: copy.closed });
+      await expect(banner).toHaveText(`${copy.closed} · ${nextBusinessLabels[language]}`);
+      await page.evaluate(() => document.fonts.ready);
+      await expect(banner).toHaveCSS("height", "32px");
+      await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: dateLabel(monday, language) })).toBeVisible();
+      await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels[language]);
+      await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText(copy.lunch);
+      await expectViewportWidth(page, 375);
+      await screenshot(page, `11-22-weekend-375-${language}-light`, info);
+    } finally {
+      await context.close();
+    }
+  });
+}
 
 const weekendDays = [
   { day: "Saturday", now: "2026-11-21T11:00:00Z" },
@@ -329,10 +339,11 @@ for (const { day, now, language } of weekendDays.flatMap(day => languages.map(la
       });
       await page.goto("/");
       const banner = page.getByRole("complementary").filter({ hasText: copy.closed });
-      const businessDay = copy.nextBusiness(dateTabLabel(monday, language));
+      const businessDay = nextBusinessLabels[language];
       await expect(banner).toHaveText(`${copy.closed} · ${businessDay}`);
       await page.evaluate(() => document.fonts.ready);
       await expect(banner).toHaveCSS("height", "32px");
+      await expectViewportWidth(page, 375);
       await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels[language]);
       await expect(page.locator('[aria-current="date"]')).toHaveCount(0);
       await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
@@ -340,6 +351,8 @@ for (const { day, now, language } of weekendDays.flatMap(day => languages.map(la
       await expect.poll(() => [...requestedDates].sort()).toEqual(["20261123", "20261124", "20261125", "20261126", "20261127"]);
       await page.getByRole("button", { name: copy.earlier }).click();
       await expect(tab(page, "20261116", language)).toHaveAttribute("aria-selected", "true");
+      await expect(banner).toHaveCSS("height", "32px");
+      await expectViewportWidth(page, 375);
       await banner.getByRole("button", { name: businessDay }).click();
       await expect(tab(page, monday, language)).toHaveAttribute("aria-selected", "true");
     } finally {
@@ -417,7 +430,7 @@ test("mutes a confirmed empty weekday and keeps future unpublished menus distinc
     await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
     await screenshot(page, "future-unpublished-mobile", info);
     const holiday = tab(page, tuesday);
-    await expect(holiday).toHaveAccessibleName(`${dateLabel(tuesday, "en", true)} · ${menuCopy.en.noMenu}`);
+    await expect(holiday).toHaveAccessibleName(`Tue 24 · ${dateLabel(tuesday, "en", true)} · ${menuCopy.en.noMenu}`);
     await expect(holiday).toHaveClass(/\btext-muted-foreground\b/);
     await expect(holiday).toBeEnabled();
     expect(await holiday.evaluate(element => getComputedStyle(element).color))

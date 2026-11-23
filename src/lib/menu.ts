@@ -33,6 +33,7 @@ export function selectLanguage(saved: string | null, browserLanguages: readonly 
 const locales = { ko, en: enUS, zh: zhCN, sv };
 const longDate = { ko: "M월 d일 (EEEE)", en: "EEEE, MMMM d", zh: "M月d日 EEEE", sv: "EEEE d MMMM" };
 const fullDate = { ko: "yyyy년 M월 d일 (EEEE)", en: "EEEE, MMMM d, yyyy", zh: "yyyy年M月d日 EEEE", sv: "EEEE d MMMM yyyy" };
+const businessDayDate = { ko: "M월 d일(EEE)", en: "EEE, MMM d", zh: "M月d日 EEE", sv: "EEE d MMM" };
 const KST = "Asia/Seoul";
 
 export function dateInKorea(now: Date) {
@@ -51,6 +52,11 @@ export function dateLabel(date: string, language: Language, includeYear = false)
 
 export function dateTabLabel(date: string, language: Language) {
   return format(parseDay(date), "EEE d", { locale: locales[language] });
+}
+
+export function businessDayLabel(date: string, language: Language) {
+  const label = format(parseDay(date), businessDayDate[language], { locale: locales[language] });
+  return language === "sv" ? label.replace(/\.$/, "") : label;
 }
 
 export function menuWeekDates(date: string, weekOffset = 0) {
