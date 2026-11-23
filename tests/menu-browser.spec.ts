@@ -16,6 +16,7 @@ const sizes = { mobile: { width: 390, height: 844 }, desktop: { width: 1280, hei
 type Size = keyof typeof sizes;
 const languages = Object.keys(LANGUAGES) as Language[];
 const themes = ["light", "dark"] as const;
+const hotPenguinSelector = 'img[src*="spicy.png"]';
 
 async function setup(
   browser: Browser, size: Size,
@@ -46,6 +47,41 @@ async function screenshot(page: Page, name: string, info: TestInfo, fullPage = f
 async function expectPenguin(image: Locator, filename: string) {
   await expect(image).toHaveAttribute("src", new RegExp(`${filename}\\.png`));
   await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+}
+
+async function expectHotPenguinCaption(card: Locator, language: Language) {
+  const penguin = card.locator(hotPenguinSelector);
+  await expect(penguin).toHaveCount(1);
+  await penguin.scrollIntoViewIfNeeded();
+  await expectPenguin(penguin, "spicy");
+  const group = penguin.locator("..");
+  await expect(group).toHaveAttribute("aria-hidden", "true");
+  const caption = group.getByText(menuCopy[language].spice[3], { exact: true });
+  await expect(caption).toHaveCSS("font-size", "11px");
+  await expect(caption).toHaveCSS("font-weight", "500");
+
+  const bounds = (await card.boundingBox())!;
+  const image = (await penguin.boundingBox())!;
+  const label = (await caption.boundingBox())!;
+  const title = (await card.getByRole("heading", { level: 4 }).boundingBox())!;
+  const rightInset = bounds.x + bounds.width - image.x - image.width;
+  expect(image.width).toBe(40);
+  expect(image.height).toBe(40);
+  expect(label.height).toBe(14);
+  expect(label.x + label.width / 2).toBeCloseTo(image.x + image.width / 2, 0);
+  expect(label.y).toBe(image.y + image.height);
+  expect(rightInset).toBeGreaterThan(0);
+  expect(rightInset).toBeLessThanOrEqual(21);
+  expect(image.y).toBeGreaterThan(bounds.y);
+  expect(label.y + label.height).toBeLessThanOrEqual(title.y);
+
+  const original = card.locator('[lang="ko"]');
+  if (await original.count()) {
+    const name = (await original.boundingBox())!;
+    expect(name.height).toBe(16);
+    expect(name.x + name.width).toBeLessThan(Math.min(image.x, label.x));
+  }
+  return { group, original };
 }
 
 async function expectErrorArtwork(image: Locator) {
@@ -205,7 +241,16 @@ for (const { size, language, theme } of liveLayouts) {
       const copy = menuCopy[language];
       const lunch = page.getByRole("region", { name: copy.lunch, exact: true });
       const dinner = page.getByRole("region", { name: copy.dinner, exact: true });
-      await expectPenguin(lunch.locator('article img[src*="spicy.png"]').first(), "spicy");
+      const hotDishes = lunch.locator("article").filter({ has: page.locator(hotPenguinSelector) });
+      await expect(hotDishes.first()).toBeVisible();
+      for (const dish of await hotDishes.all()) {
+        const { original } = await expectHotPenguinCaption(dish, language);
+        if (await original.count()) {
+          expect(await original.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
+            await original.evaluate(element => element.clientWidth),
+          );
+        }
+      }
       await expect(lunch.getByRole("heading", { level: 4 })).toHaveText([
         ...(await lunch.locator("article h4").allTextContents()), copy.salad, copy.selfService,
       ]);
@@ -519,7 +564,7 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
 for (const size of Object.keys(sizes) as Size[]) {
   for (const language of languages) {
     for (const theme of themes) {
-      test(`fits the hot penguin inside the upper-right corner on ${size} in ${language} and ${theme} mode`, async ({ browser }) => {
+      test(`fits the hot penguin and caption on ${size} in ${language} and ${theme} mode`, async ({ browser }) => {
         const { page, context } = await setup(browser, size, { language, dark: theme === "dark" });
         const hotDish = { ...mainDish, original_name: "매운버섯전골".repeat(8), info: { spice: 3 as const } };
         const cornerlessDish = { ...hotDish, id: 2, name: "Hot noodles", corner_name: "", original_name: undefined };
@@ -533,32 +578,18 @@ for (const size of Object.keys(sizes) as Size[]) {
           for (const dish of [hotDish, cornerlessDish]) {
             const heading = page.getByRole("heading", { name: dish.name, exact: true });
             const card = page.getByRole("article").filter({ has: heading });
-            const penguin = card.locator('img[src*="spicy.png"]');
-            await expect(penguin).toHaveCount(1);
-            await penguin.scrollIntoViewIfNeeded();
-            await expectPenguin(penguin, "spicy");
-            const bounds = (await card.boundingBox())!;
-            const image = (await penguin.boundingBox())!;
-            const title = (await heading.boundingBox())!;
-            const rightInset = bounds.x + bounds.width - image.x - image.width;
-            expect(image.width).toBe(44);
-            expect(image.height).toBe(44);
-            expect(rightInset).toBeGreaterThan(0);
-            expect(rightInset).toBeLessThanOrEqual(21);
-            expect(image.y).toBeGreaterThan(bounds.y);
-            expect(image.y + image.height).toBeLessThanOrEqual(title.y);
+            const { group, original } = await expectHotPenguinCaption(card, language);
+            const stack = (await group.boundingBox())!;
 
             if (dish.corner_name) {
               const badge = (await card.getByText(cornerLabel(dish.corner_name, language), { exact: true }).boundingBox())!;
-              expect(image.y + image.height / 2).toBeCloseTo(badge.y + badge.height / 2, 0);
+              expect(stack.y + stack.height / 2).toBeCloseTo(badge.y + badge.height / 2, 0);
             }
-            const original = card.locator('[lang="ko"]');
             if (language !== "ko" && dish.original_name) {
               await expect(original).toHaveText(dish.original_name);
               const name = (await original.boundingBox())!;
-              expect(name.x + name.width).toBeLessThan(image.x);
-              expect(name.y + name.height / 2).toBeCloseTo(image.y + image.height / 2, 0);
-              if (size === "mobile") expect(name.height).toBeGreaterThan(16);
+              expect(name.y + name.height / 2).toBeCloseTo(stack.y + stack.height / 2, 0);
+              if (size === "mobile") await expect(original).toHaveCSS("text-overflow", "ellipsis");
             } else {
               await expect(original).toHaveCount(0);
             }

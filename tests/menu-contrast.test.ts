@@ -40,18 +40,21 @@ function luminance(hsl: string) {
 
 const light = palette(":root");
 const dark = new Map([...light, ...palette(".dark")]);
-const foregrounds = ["--foreground", "--muted-foreground", "--menu-accent-foreground"];
+const foregrounds = ["--foreground", "--menu-accent-foreground"];
 const surfaces = ["--background", "--card", "--muted"];
 const pairs = [
   ...foregrounds.flatMap(foreground => surfaces.map(surface => [foreground, surface])),
+  ["--muted-foreground", "--card", "hot penguin caption"],
+  ["--muted-foreground", "--background"],
+  ["--muted-foreground", "--muted"],
   ["--menu-accent-foreground", "--menu-accent"],
   ["--foreground", "--menu-speech"],
   ["--secondary-foreground", "--muted"],
 ];
 
 for (const [theme, tokens] of [["light", light], ["dark", dark]] as const) {
-  for (const [foreground, surface] of pairs) {
-    test(`${theme} ${foreground} on ${surface} meets 4.5:1 contrast`, () => {
+  for (const [foreground, surface, label = `${foreground} on ${surface}`] of pairs) {
+    test(`${theme} ${label} meets 4.5:1 contrast`, () => {
       const text = luminance(colorValue(tokens, foreground));
       const background = luminance(colorValue(tokens, surface));
       const ratio = (Math.max(text, background) + 0.05) / (Math.min(text, background) + 0.05);
