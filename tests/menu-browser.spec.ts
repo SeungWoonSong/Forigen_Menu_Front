@@ -442,6 +442,38 @@ for (const size of Object.keys(sizes) as Size[]) {
   });
 }
 
+test("omits the estimate label from cards, side sheets and tooltips in every language", async ({ browser }) => {
+  const estimateLabel = /^(추정|estimated|推测|uppskattat)$/;
+  const side = mainDish.sub_items![1];
+
+  for (const language of languages) {
+    for (const size of Object.keys(sizes) as Size[]) {
+      await test.step(`${language} on ${size}`, async () => {
+        const { page, context } = await setup(browser, size, { language });
+        const copy = menuCopy[language];
+        try {
+          await fixtureMenu(page);
+          await page.goto("/");
+          const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: mainDish.name }) });
+          await expect(card.getByText(copy.spice[0], { exact: true })).toBeVisible();
+          await expect(card.getByText(estimateLabel)).toHaveCount(0);
+
+          const chip = card.getByRole("button", { name: side.name });
+          const details = size === "mobile" ? page.getByRole("dialog", { name: side.name })
+            : page.locator("[data-radix-popper-content-wrapper]");
+          if (size === "mobile") await chip.tap();
+          else await chip.hover();
+          await expect(details.getByText(copy.spice[1], { exact: true })).toBeVisible();
+          await expect(details.getByText(copy.allergy, { exact: true })).toBeVisible();
+          await expect(details.getByText(estimateLabel)).toHaveCount(0);
+        } finally {
+          await context.close();
+        }
+      });
+    }
+  }
+});
+
 test("renders rich API fields and opens a dismissible mobile side sheet", async ({ browser }, info) => {
   const { page, context } = await setup(browser, "mobile");
   try {
@@ -456,7 +488,7 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
     await expect(dish.getByText(mainDish.info!.how_to_eat!, { exact: true })).toBeVisible();
     await expectPenguin(dish.locator("aside img").first(), "mascot");
     await expectPenguin(dish.locator("aside img").last(), "howtoeat");
-    for (const tag of ["Not spicy", "Vegetarian", "Contains · Soy, Wheat", "May contain · Egg", "estimated"]) {
+    for (const tag of ["Not spicy", "Vegetarian", "Contains · Soy, Wheat", "May contain · Egg"]) {
       await expect(dish.getByText(tag, { exact: true })).toBeVisible();
     }
     await expect(page.getByText("Updated 12:07")).toBeVisible();
@@ -468,7 +500,7 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
     await chip.tap();
     await expect(sheet).toBeVisible();
     await expectViewportWidth(page, sizes.mobile.width);
-    for (const detail of ["숙주나물", "Tender bean sprouts seasoned with sesame oil.", "Mild", "Vegan", "Contains · Soy", "May contain · Peanuts", "estimated", menuCopy.en.allergy]) {
+    for (const detail of ["숙주나물", "Tender bean sprouts seasoned with sesame oil.", "Mild", "Vegan", "Contains · Soy", "May contain · Peanuts", menuCopy.en.allergy]) {
       await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
     }
     await screenshot(page, "rich-side-sheet-mobile", info);

@@ -22,7 +22,6 @@ export function DietaryTags({ info, language }: { info?: MenuInfo; language: Lan
       {info.vegan && <span className={tag}><Leaf size={13} aria-hidden="true" />{copy.vegan}</span>}
       {contains && <span className={`${tag} bg-muted`}>{copy.contains(contains)}</span>}
       {mayContain && <span className={`${tag} border-dashed text-muted-foreground`}>{copy.mayContain(mayContain)}</span>}
-      <span className="text-xs text-muted-foreground">{copy.estimated}</span>
     </div>
   );
 }
