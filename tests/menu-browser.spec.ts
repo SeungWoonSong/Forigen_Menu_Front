@@ -295,9 +295,11 @@ test("@live Sunday evening opens next Monday with lunch first and the weekend ba
   const { page, context } = await setup(browser, "mobile", { now: "2026-11-22T11:00:00Z" });
   try {
     await page.goto("/");
-    await expect(page.getByRole("complementary")).toHaveText(
+    const banner = page.getByRole("complementary");
+    await expect(banner).toHaveText(
       `${menuCopy.en.closed} · ${menuCopy.en.nextBusiness(dateTabLabel(monday, "en"))}`,
     );
+    await expect(banner).toHaveCSS("height", "32px");
     await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("heading", { name: dateLabel(monday, "en") })).toBeVisible();
     await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels.en);
@@ -311,7 +313,7 @@ test("@live Sunday evening opens next Monday with lunch first and the weekend ba
 
 for (const [day, now] of [["Saturday", "2026-11-21T11:00:00Z"], ["Sunday", "2026-11-22T11:00:00Z"]]) {
   test(`opens next Monday on ${day} even when Monday is unpublished`, async ({ browser }) => {
-    const { page, context } = await setup(browser, "mobile", { now });
+    const { page, context } = await setup(browser, "mobile", { now, width: 375 });
     const requestedDates: string[] = [];
     try {
       await page.route(menuRoute, route => {
@@ -323,11 +325,12 @@ for (const [day, now] of [["Saturday", "2026-11-21T11:00:00Z"], ["Sunday", "2026
       const banner = page.getByRole("complementary").filter({ hasText: menuCopy.en.closed });
       const businessDay = menuCopy.en.nextBusiness(dateTabLabel(monday, "en"));
       await expect(banner).toHaveText(`${menuCopy.en.closed} · ${businessDay}`);
+      await expect(banner).toHaveCSS("height", "32px");
       await expect(page.getByRole("tablist").getByRole("tab")).toHaveText(expectedTabLabels.en);
       await expect(page.locator('[aria-current="date"]')).toHaveCount(0);
       await expect(tab(page, monday)).toHaveAttribute("aria-selected", "true");
       await expect(page.getByRole("heading", { name: menuCopy.en.unpublished })).toBeVisible();
-      expect(requestedDates.sort()).toEqual(["20261123", "20261124", "20261125", "20261126", "20261127"]);
+      await expect.poll(() => [...requestedDates].sort()).toEqual(["20261123", "20261124", "20261125", "20261126", "20261127"]);
       await page.getByRole("button", { name: menuCopy.en.earlier }).click();
       await expect(tab(page, "20261116")).toHaveAttribute("aria-selected", "true");
       await banner.getByRole("button", { name: businessDay }).click();

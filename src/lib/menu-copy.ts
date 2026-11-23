@@ -20,7 +20,7 @@ export const menuCopy = {
     today: "Today", dates: "Menu dates", available: "Menu available", noMenu: "No menu",
     earlier: "Previous week", later: "Next week", lunch: "Lunch", dinner: "Dinner",
     noMeal: "No menu for this meal", selfService: "Self-service bar", salad: "Salad & take-out",
-    loading: "Loading the menu", closed: "The cafeteria is closed today",
+    loading: "Loading the menu", closed: "Cafeteria closed today",
     unpublished: "The menu hasn’t been posted yet", empty: "There’s no menu for this date",
     error: "Couldn’t load the menu", retry: "Try again",
     nextBusiness: (date: string) => `Next business day ${date}`, updated: (time: string) => `Updated ${time}`,
