@@ -83,19 +83,20 @@ async function expectHotPenguinSpeech(card: Locator, language: Language) {
   expect(Math.max(image.y + image.height, bubble.y + bubble.height)).toBeLessThanOrEqual(title.y);
 
   const row = group.locator("..");
-  const original = row.locator(':scope > span[lang="ko"]');
-  const badge = row.locator(':scope > span:not([lang])');
-  for (const label of [badge, original]) {
-    if (await label.count()) {
-      const box = (await label.boundingBox())!;
-      expect(box.x + box.width).toBeLessThanOrEqual(bubble.x);
-      await expect(label).toBeVisible();
-      expect(await label.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(
-        await label.evaluate(element => element.clientWidth),
-      );
-    }
+  const rowBounds = (await row.boundingBox())!;
+  expect(image.x + image.width).toBeCloseTo(rowBounds.x + rowBounds.width);
+  await expect(row.locator(':scope > span[lang="ko"]')).toHaveCount(0);
+  const badge = row.locator(":scope > span");
+  if (await badge.count()) {
+    const box = (await badge.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(bubble.x);
+    await expect(badge).toBeVisible();
+    const { scrollWidth, clientWidth } = await badge.evaluate(element => ({
+      scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+    }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   }
-  return { badge, original };
+  return badge;
 }
 
 async function expectErrorArtwork(image: Locator) {
@@ -230,6 +231,7 @@ test("shows all seven date tabs without scrolling when they fit on desktop", asy
 const liveLayouts = [
   ...languages.flatMap(language => themes.map(theme => ({ size: "mobile" as const, language, theme }))),
   ...languages.map(language => ({ size: "desktop" as const, language, theme: "light" as const })),
+  { size: "desktop", language: "en", theme: "dark" } as const,
 ];
 
 for (const { size, language, theme } of liveLayouts) {
@@ -245,6 +247,7 @@ for (const { size, language, theme } of liveLayouts) {
       await expect(page.getByRole("button", { name: LANGUAGES[language].name })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByRole("heading", { name: menuCopy[language].lunch, exact: true })).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("lang", language);
+      await expect(page.locator('article > div > span[lang="ko"]')).toHaveCount(0);
       const corner = { ko: "코너1", en: "Corner 1", zh: "1号窗口", sv: "Disk 1" }[language];
       await expect(page.getByText(corner, { exact: true }).first()).toBeVisible();
       for (const list of await page.locator("article ul").all()) {
@@ -497,7 +500,7 @@ for (const size of Object.keys(sizes) as Size[]) {
   });
 }
 
-test("omits the estimate label from cards, side sheets and tooltips in every language", async ({ browser }) => {
+test("omits estimate labels and preserves side detail original names across languages", async ({ browser }) => {
   const estimateLabel = /^(추정|estimated|推测|uppskattat)$/;
   const side = mainDish.sub_items![1];
 
@@ -521,6 +524,9 @@ test("omits the estimate label from cards, side sheets and tooltips in every lan
           await expect(details.getByText(copy.spice[1], { exact: true })).toBeVisible();
           await expect(details.getByText(copy.allergy, { exact: true })).toBeVisible();
           await expect(details.getByText(estimateLabel)).toHaveCount(0);
+          const originalName = details.locator('p[lang="ko"]');
+          if (language === "ko") await expect(originalName).toHaveCount(0);
+          else await expect(originalName).toHaveText(side.original_name!);
         } finally {
           await context.close();
         }
@@ -535,7 +541,7 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
     await fixtureMenu(page);
     await page.goto("/");
     const dish = page.locator("article").filter({ has: page.getByRole("heading", { name: mainDish.name }) });
-    await expect(dish.getByText(mainDish.original_name!, { exact: true })).toBeVisible();
+    await expect(dish.getByText(mainDish.original_name!, { exact: true })).toHaveCount(0);
     await expect(dish.getByText(mainDish.info!.summary!, { exact: true })).toBeVisible();
     await expect(dish.getByText(mainDish.info!.detail!, { exact: true })).toBeVisible();
     await expect(dish.getByText(mainDish.description, { exact: true })).toHaveCount(0);
@@ -576,8 +582,8 @@ for (const width of [375, 390, 430, 1280]) {
       test(`fits the hot penguin and speech bubble at ${width}px in ${language} and ${theme} mode`, async ({ browser }) => {
         const size = width === sizes.desktop.width ? "desktop" : "mobile";
         const { page, context } = await setup(browser, size, { width, language, dark: theme === "dark" });
-        const hotDish = { ...mainDish, original_name: "청양풍해물볶음우동&유부초밥세트", info: { spice: 3 as const } };
-        const cornerlessDish = { ...hotDish, id: 2, name: "Hot noodles", corner_name: "", original_name: undefined };
+        const hotDish = { ...mainDish, info: { spice: 3 as const } };
+        const cornerlessDish = { ...hotDish, id: 2, name: "Hot noodles", corner_name: "" };
         try {
           await fixtureMenu(page);
           await page.route(mondayRoute, route => route.fulfill({
@@ -588,19 +594,12 @@ for (const width of [375, 390, 430, 1280]) {
           for (const dish of [hotDish, cornerlessDish]) {
             const heading = page.getByRole("heading", { name: dish.name, exact: true });
             const card = page.getByRole("article").filter({ has: heading });
-            const { badge, original } = await expectHotPenguinSpeech(card, language);
+            const badge = await expectHotPenguinSpeech(card, language);
 
             if (dish.corner_name) {
               await expect(badge).toHaveText(cornerLabel(dish.corner_name, language));
-            }
-            if (language !== "ko" && dish.original_name) {
-              await expect(original).toHaveText(dish.original_name);
-              const name = (await original.boundingBox())!;
-              const corner = (await badge.boundingBox())!;
-              expect(corner.x + corner.width).toBeLessThan(name.x);
-              if (width === 375) expect(name.height).toBeGreaterThan(16);
             } else {
-              await expect(original).toHaveCount(0);
+              await expect(badge).toHaveCount(0);
             }
           }
           await expectViewportWidth(page, width);

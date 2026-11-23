@@ -2,7 +2,7 @@ import Image from "next/image";
 import { Moon, Salad, Soup, Sun } from "lucide-react";
 import { useId } from "react";
 import type { DayMenu, Language, MenuItem } from "../types/menu";
-import { cornerLabel, dateLabel, displayOriginalName, extraMenuChips, extraMenuMeal, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
+import { cornerLabel, dateLabel, extraMenuChips, extraMenuMeal, PENGUIN, sideItems, timeInKorea } from "../lib/menu";
 import { menuCopy } from "../lib/menu-copy";
 import { DietaryTags } from "./DietaryTags";
 import { SideChips } from "./SideChips";
@@ -23,19 +23,17 @@ function DishCard({ item, language }: { item: MenuItem; language: Language }) {
   const copy = menuCopy[language];
   const { info } = item;
   const detail = info?.detail || item.description;
-  const originalName = displayOriginalName(item, language);
   const isHot = info?.spice === 3;
 
   return (
     <article className="min-w-0 space-y-3 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-      {(item.corner_name || originalName || isHot) && (
-        <div className={`flex justify-between gap-3 ${isHot ? "items-center" : "items-baseline"}`}>
+      {(item.corner_name || isHot) && (
+        <div className="flex items-center gap-3">
           {item.corner_name && <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
             {cornerLabel(item.corner_name, language)}
           </span>}
-          {originalName && <span lang="ko" className={`ml-auto text-right text-xs text-muted-foreground ${isHot ? "min-w-0 break-words" : ""}`}>{originalName}</span>}
           {isHot && (
-            <div aria-hidden="true" className={`-my-2 flex shrink-0 items-center gap-1.5 ${originalName ? "" : "ml-auto"}`}>
+            <div aria-hidden="true" className="-my-2 ml-auto flex shrink-0 items-center gap-1.5">
               <span className="menu-speech menu-speech-right shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold leading-[14px] text-foreground">{copy.spicySpeech}</span>
               <Image src={PENGUIN.spicy} alt="" width={40} height={40} className="shrink-0" />
             </div>

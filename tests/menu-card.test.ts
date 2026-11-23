@@ -3,16 +3,17 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MenuCard } from "../src/components/MenuCard";
+import { displayOriginalName } from "../src/lib/menu";
 import { menuCopy } from "../src/lib/menu-copy";
-import type { Language, MenuInfo } from "../src/types/menu";
+import type { Language, MenuInfo, MenuItem } from "../src/types/menu";
 import { emptyMenu, mainDish } from "./menu-fixtures";
 
 const spicySpeech = { ko: "앗 매워!", en: "So spicy!", zh: "好辣！", sv: "Oj, starkt!" };
 const languages = Object.keys(spicySpeech) as Language[];
 const spicyPenguin = /<img\b[^>]*%2Fpenguin%2Fspicy\.png[^>]*>/;
 
-function renderDish(info: MenuInfo, language: Language = "en") {
-  const menu = { ...emptyMenu("20261123", language), lunch: [{ ...mainDish, info }] };
+function renderDish(info: MenuInfo, language: Language = "en", dish: MenuItem = mainDish) {
+  const menu = { ...emptyMenu("20261123", language), lunch: [{ ...dish, info }] };
   const markup = renderToStaticMarkup(createElement(MenuCard, { menu, language, dinnerFirst: false }));
   return markup.match(/<article\b[^>]*>([\s\S]*?)<\/article>/)![1];
 }
@@ -24,6 +25,7 @@ for (const language of languages) {
     assert.equal(images.length, 1);
     const [[image]] = images;
     const firstRow = card.slice(0, card.indexOf("</div></div>"));
+    assert.match(firstRow, /<div aria-hidden="true" class="[^"]*\bml-auto\b/);
     const group = firstRow.match(/<div aria-hidden="true"[^>]*>([\s\S]*)$/)?.[1];
     assert.ok(group);
     assert.match(image, /\balt=""/);
@@ -34,6 +36,23 @@ for (const language of languages) {
     assert.doesNotMatch(card, /<aside\b/);
   });
 }
+
+test("omits Korean originals from every main dish card and keeps them available for side details", () => {
+  const side = mainDish.sub_items![1];
+  for (const language of languages) {
+    for (const spice of [0, 3] as const) {
+      const card = renderDish({ spice }, language);
+      assert.doesNotMatch(card, /\blang="ko"/);
+      assert.ok(!card.includes(mainDish.original_name!));
+    }
+    assert.equal(displayOriginalName(side, language), language === "ko" ? undefined : side.original_name);
+  }
+});
+
+test("starts with the dish title when there is no corner badge or hot penguin", () => {
+  const card = renderDish({ spice: 0 }, "en", { ...mainDish, corner_name: "" });
+  assert.match(card, /^<div\b[^>]*><h4\b/);
+});
 
 test("omits the hot penguin and speech bubble for spice levels zero through two", () => {
   for (const language of languages) {
