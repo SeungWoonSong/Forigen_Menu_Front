@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  cornerLabel, dateInKorea, displayOriginalName, extraMenuChips, extraMenuMeal, initialMenuDates, isClosedDay, isStaple,
-  menuState, nextBusinessDay, pickDefaultDate, selectLanguage, sideItems, timeInKorea,
+  cornerLabel, dateInKorea, displayOriginalName, extraMenuChips, extraMenuMeal, initialMenuDates, isStaple,
+  menuState, menuWeekDates, pickDefaultDate, selectLanguage, sideItems, timeInKorea,
 } from "../src/lib/menu";
 import type { MenuRequest } from "../src/lib/menu";
 import { normalizeDayMenu } from "../src/services/menuService";
@@ -27,20 +27,30 @@ test("observes Korean calendar and time across UTC day and meal boundaries", () 
   assert.equal(timeInKorea(new Date("2026-11-23T05:00:00Z")), "14:00");
 });
 
-test("includes both weekend dates in the Sunday calendar around Monday", () => {
-  assert.deepEqual(initialMenuDates("20261122"), [
-    "20261119", "20261120", "20261121", "20261122", "20261123", "20261124", "20261125",
+test("shows Monday through Friday across month, year, and leap-day boundaries", () => {
+  assert.deepEqual(menuWeekDates("20260630"), [
+    "20260629", "20260630", "20260701", "20260702", "20260703",
   ]);
-  assert.equal(isClosedDay("20261121"), true);
-  assert.equal(isClosedDay("20261122"), true);
-  assert.equal(isClosedDay("20261123"), false);
-  assert.equal(nextBusinessDay("20270101"), "20270104");
+  assert.deepEqual(menuWeekDates("20270101"), [
+    "20261228", "20261229", "20261230", "20261231", "20270101",
+  ]);
+  assert.deepEqual(menuWeekDates("20240229"), [
+    "20240226", "20240227", "20240228", "20240229", "20240301",
+  ]);
 });
 
-test("defaults to today, the next menu, or the last menu in that order", () => {
-  const today = "20261123";
-  const past = "20261120";
-  const upcoming = "20261124";
+test("moves a full week in either direction across a year boundary", () => {
+  const next = menuWeekDates("20270101", 1);
+  assert.deepEqual(next, [
+    "20270104", "20270105", "20270106", "20270107", "20270108",
+  ]);
+  assert.deepEqual(menuWeekDates(next[4], -1), menuWeekDates("20270101"));
+});
+
+test("defaults to today, then the next or latest past menu in the displayed week", () => {
+  const today = "20261125";
+  const past = "20261124";
+  const upcoming = "20261126";
   const dates = initialMenuDates(today);
   const results = { [past]: ready(richMenu(past)), [upcoming]: ready(richMenu(upcoming)) };
   assert.equal(pickDefaultDate(dates, today, { ...results, [today]: ready(richMenu(today)) }), today);
@@ -48,24 +58,26 @@ test("defaults to today, the next menu, or the last menu in that order", () => {
   assert.equal(pickDefaultDate(dates, today, { [past]: results[past], [today]: ready(emptyMenu(today)) }), past);
   assert.equal(pickDefaultDate(dates, today, { ...results, [today]: { status: "error" } }), today);
   assert.equal(pickDefaultDate(dates, today, { [today]: ready(emptyMenu(today)) }), today);
+  assert.equal(pickDefaultDate(dates, today, {
+    [today]: ready(emptyMenu(today)),
+    "20261120": ready(richMenu("20261120")),
+    "20261130": ready(richMenu("20261130")),
+  }), today);
 });
 
-test("on a weekend opens the next business day or falls back to the latest published past menu", () => {
-  const sunday = "20261122";
+test("both weekend days open the next Monday even when its menu is unpublished", () => {
   const monday = "20261123";
-  const friday = "20261120";
-  const tuesday = "20261124";
-  const dates = initialMenuDates(sunday);
-  const results = {
-    "20261119": ready(richMenu("20261119")),
-    [friday]: ready(richMenu(friday)),
-    [tuesday]: ready(richMenu(tuesday)),
-  };
-  assert.equal(pickDefaultDate(dates, sunday, { ...results, [monday]: ready(richMenu(monday)) }), monday);
-  assert.equal(pickDefaultDate(dates, sunday, { ...results, [monday]: ready(emptyMenu(monday)) }), friday);
-  assert.equal(pickDefaultDate(dates, sunday, { ...results, [monday]: { status: "error" } }), monday);
-  assert.equal(pickDefaultDate(dates, sunday, { [monday]: ready(emptyMenu(monday)) }), monday);
-  assert.equal(pickDefaultDate(dates, sunday, {}), monday);
+  const weekdays = ["20261123", "20261124", "20261125", "20261126", "20261127"];
+  assert.deepEqual(initialMenuDates("20261127"), weekdays);
+  for (const today of ["20261121", "20261122"]) {
+    const dates = initialMenuDates(today);
+    assert.deepEqual(dates, weekdays);
+    assert.equal(pickDefaultDate(dates, today, {}), monday);
+    assert.equal(pickDefaultDate(dates, today, {
+      [monday]: ready(emptyMenu(monday)),
+      "20261124": ready(richMenu("20261124")),
+    }), monday);
+  }
 });
 
 test("normalizes optional menu fields independently and retains usable items", () => {
@@ -108,10 +120,9 @@ test("rejects responses with invalid required meal arrays or item structure", ()
   assert.equal(normalizeDayMenu({ lunch: [], dinner: [{ name: "Soup", sub_menus: "Rice" }] }, date, "en"), undefined);
 });
 
-test("distinguishes closed, loading, error, future and confirmed empty menus", () => {
+test("distinguishes loading, error, unpublished and confirmed empty weekday menus", () => {
   const today = "20261123";
   const future = "20261124";
-  assert.equal(menuState("20261122", today), "closed");
   assert.equal(menuState(today, today), "loading");
   assert.equal(menuState(future, today, { status: "error" }), "error");
   assert.equal(menuState(future, today, ready(emptyMenu(future))), "unpublished");
