@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Browser, Locator, Page, TestInfo } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { dateLabel, LANGUAGES } from "../src/lib/menu";
+import { cornerLabel, dateLabel, LANGUAGES } from "../src/lib/menu";
 import { menuCopy } from "../src/lib/menu-copy";
 import type { Language } from "../src/types/menu";
 import { emptyMenu, koreanDish, mainDish, malformedMenu, richMenu } from "./menu-fixtures";
@@ -205,6 +205,7 @@ for (const { size, language, theme } of liveLayouts) {
       const copy = menuCopy[language];
       const lunch = page.getByRole("region", { name: copy.lunch, exact: true });
       const dinner = page.getByRole("region", { name: copy.dinner, exact: true });
+      await expectPenguin(lunch.locator('article img[src*="spicy.png"]').first(), "spicy");
       await expect(lunch.getByRole("heading", { level: 4 })).toHaveText([
         ...(await lunch.locator("article h4").allTextContents()), copy.salad, copy.selfService,
       ]);
@@ -515,39 +516,61 @@ test("renders rich API fields and opens a dismissible mobile side sheet", async 
   }
 });
 
-test("shows both penguin illustrations for hot menu tips on mobile", async ({ browser }, info) => {
-  const { page, context } = await setup(browser, "mobile");
-  try {
-    await fixtureMenu(page);
-    const hotInfo = { ...mainDish.info!, spice: 3 as const };
-    await page.route(mondayRoute, route => route.fulfill({
-      json: {
-        ...richMenu(monday),
-        lunch: [{ ...mainDish, info: hotInfo }],
-        dinner: [
-          { ...mainDish, id: 2, name: "Hot noodles with a serving tip", info: { ...hotInfo, similar_to: undefined } },
-          { ...mainDish, id: 3, name: "Hot noodles without tips", info: { spice: 3 } },
-        ],
-      },
-    }));
-    await page.goto("/");
-    const lunch = page.locator("article").filter({ has: page.getByRole("heading", { name: mainDish.name }) });
-    await expect(lunch.getByText(menuCopy.en.spice[3], { exact: true })).toBeVisible();
-    await expect(lunch.getByText(hotInfo.how_to_eat!, { exact: true })).toBeVisible();
-    await expectPenguin(lunch.locator("aside img").first(), "spicy");
-    await expectPenguin(lunch.locator("aside img").last(), "howtoeat");
-    await screenshot(page, "hot-menu-penguin-tips-mobile", info);
+for (const size of Object.keys(sizes) as Size[]) {
+  for (const language of languages) {
+    for (const theme of themes) {
+      test(`fits the hot penguin inside the upper-right corner on ${size} in ${language} and ${theme} mode`, async ({ browser }) => {
+        const { page, context } = await setup(browser, size, { language, dark: theme === "dark" });
+        const hotDish = { ...mainDish, original_name: "매운버섯전골".repeat(8), info: { spice: 3 as const } };
+        const cornerlessDish = { ...hotDish, id: 2, name: "Hot noodles", corner_name: "", original_name: undefined };
+        try {
+          await fixtureMenu(page);
+          await page.route(mondayRoute, route => route.fulfill({
+            json: { ...emptyMenu(monday, language), lunch: [hotDish, cornerlessDish] },
+          }));
+          await page.goto("/");
+          await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
+          for (const dish of [hotDish, cornerlessDish]) {
+            const heading = page.getByRole("heading", { name: dish.name, exact: true });
+            const card = page.getByRole("article").filter({ has: heading });
+            const penguin = card.locator('img[src*="spicy.png"]');
+            await expect(penguin).toHaveCount(1);
+            await penguin.scrollIntoViewIfNeeded();
+            await expectPenguin(penguin, "spicy");
+            const bounds = (await card.boundingBox())!;
+            const image = (await penguin.boundingBox())!;
+            const title = (await heading.boundingBox())!;
+            const rightInset = bounds.x + bounds.width - image.x - image.width;
+            expect(image.width).toBe(44);
+            expect(image.height).toBe(44);
+            expect(rightInset).toBeGreaterThan(0);
+            expect(rightInset).toBeLessThanOrEqual(21);
+            expect(image.y).toBeGreaterThan(bounds.y);
+            expect(image.y + image.height).toBeLessThanOrEqual(title.y);
 
-    const withServingTip = page.locator("article").filter({ has: page.getByRole("heading", { name: "Hot noodles with a serving tip" }) });
-    await expect(withServingTip.locator("aside")).toContainText(menuCopy.en.spice[3]);
-    const withoutTips = page.locator("article").filter({ has: page.getByRole("heading", { name: "Hot noodles without tips" }) });
-    await expect(withoutTips.locator("aside")).toContainText(menuCopy.en.spice[3]);
-    await withoutTips.scrollIntoViewIfNeeded();
-    await expectPenguin(withoutTips.locator("aside img"), "spicy");
-  } finally {
-    await context.close();
+            if (dish.corner_name) {
+              const badge = (await card.getByText(cornerLabel(dish.corner_name, language), { exact: true }).boundingBox())!;
+              expect(image.y + image.height / 2).toBeCloseTo(badge.y + badge.height / 2, 0);
+            }
+            const original = card.locator('[lang="ko"]');
+            if (language !== "ko" && dish.original_name) {
+              await expect(original).toHaveText(dish.original_name);
+              const name = (await original.boundingBox())!;
+              expect(name.x + name.width).toBeLessThan(image.x);
+              expect(name.y + name.height / 2).toBeCloseTo(image.y + image.height / 2, 0);
+              if (size === "mobile") expect(name.height).toBeGreaterThan(16);
+            } else {
+              await expect(original).toHaveCount(0);
+            }
+          }
+          await expectViewportWidth(page, sizes[size].width);
+        } finally {
+          await context.close();
+        }
+      });
+    }
   }
-});
+}
 
 test("shows dinner first in the afternoon and opens the desktop tooltip on hover and focus", async ({ browser }, info) => {
   const { page, context } = await setup(browser, "desktop", { now: "2026-11-23T05:00:00Z" });
